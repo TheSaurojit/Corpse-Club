@@ -9,28 +9,63 @@ import {
   DurationMinutes,
   DURATION_OPTIONS,
   TimeBlockAvailability,
+  calculateAvailabilityBlocks,
   fetchAvailabilityFromDb,
-  fetchAvailableDatesWithDbCounts,
   formatDateDisplay,
   getPriceForDuration,
   generate6CharBookingId,
 } from '@/lib/booking';
-import { createDbBookingAction } from '@/actions/booking-actions';
+import {
+  createDbBookingAction,
+  getBookingHubInitialDataAction,
+} from '@/actions/booking-actions';
 
 export default function BookingHubPage() {
   const router = useRouter();
   const [isLoadingDates, setIsLoadingDates] = useState<boolean>(true);
   const [availableDates, setAvailableDates] = useState<BookingDate[]>([]);
+  const [bookedSlotsCache, setBookedSlotsCache] = useState<Record<string, number[]>>({});
+  const [holidayDatesCache, setHolidayDatesCache] = useState<string[]>([]);
 
-  // Sync live slot availability counts across all 7 calendar days from Neon PostgreSQL (skipping holidays)
+  // Sync live slot availability counts across 5 calendar days from Neon PostgreSQL (single-roundtrip batch)
   useEffect(() => {
     setIsLoadingDates(true);
-    fetchAvailableDatesWithDbCounts(7)
-      .then((dates) => {
-        setAvailableDates(dates);
-        if (dates.length > 0) {
-          setSelectedDate((prev) => (prev && dates.some((d) => d.dateString === prev) ? prev : dates[0].dateString));
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    getBookingHubInitialDataAction(5, todayStr)
+      .then((data) => {
+        if (data.success && data.dates.length > 0) {
+          setAvailableDates(data.dates);
+          setBookedSlotsCache(data.bookedSlotsByDate);
+          setHolidayDatesCache(data.holidayDates);
+
+          const defaultDate = data.dates[0].dateString;
+          setSelectedDate((prev) => (prev && data.dates.some((d) => d.dateString === prev) ? prev : defaultDate));
+
+          // Pre-calculate initial slot availability for Step 3 in memory with 0ms delay
+          const targetDate = defaultDate;
+          const isHoliday = data.holidayDates.includes(targetDate);
+          const bookedIndices = data.bookedSlotsByDate[targetDate] || [];
+          const initialBlocks = calculateAvailabilityBlocks(
+            targetDate,
+            40,
+            bookedIndices,
+            isHoliday,
+            'fixed'
+          );
+          setAvailabilityResult(initialBlocks);
+        } else {
+          const fallback = getAvailableDates(5, [], todayStr);
+          setAvailableDates(fallback);
+          if (fallback.length > 0) setSelectedDate(fallback[0].dateString);
         }
+      })
+      .catch((err) => {
+        console.error('Error fetching initial booking hub data:', err);
+        const fallback = getAvailableDates(5, [], todayStr);
+        setAvailableDates(fallback);
+        if (fallback.length > 0) setSelectedDate(fallback[0].dateString);
       })
       .finally(() => {
         setIsLoadingDates(false);
@@ -95,16 +130,34 @@ export default function BookingHubPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isModalOpen]);
 
-  // Load database availability when date, duration, or view mode changes
-  const loadAvailability = (dateStr: string, duration: DurationMinutes, mode: 'fixed' | 'flexible') => {
+  // Load database availability with instant in-memory calculation if cached
+  const loadAvailability = (
+    dateStr: string,
+    duration: DurationMinutes,
+    mode: 'fixed' | 'flexible',
+    customBookedMap?: Record<string, number[]>,
+    customHolidays?: string[]
+  ) => {
+    const bookedMap = customBookedMap || bookedSlotsCache;
+    const holidays = customHolidays || holidayDatesCache;
+    const isHoliday = holidays.includes(dateStr);
+
+    // If slot indices for this date are cached, compute immediately (0ms, 0 network requests)
+    if (bookedMap[dateStr] !== undefined) {
+      setIsLoadingAvailability(false);
+      const res = calculateAvailabilityBlocks(dateStr, duration, bookedMap[dateStr], isHoliday, mode);
+      setAvailabilityResult(res);
+      return;
+    }
+
+    // Fallback network fetch if date is outside initial batch
     setIsLoadingAvailability(true);
     setSelectedBlock(null);
     fetchAvailabilityFromDb(dateStr, duration, mode)
       .then((res) => {
         setAvailabilityResult(res);
-        setIsLoadingAvailability(false);
       })
-      .catch(() => {
+      .finally(() => {
         setIsLoadingAvailability(false);
       });
   };
@@ -306,9 +359,17 @@ export default function BookingHubPage() {
           totalPrice: calculatedTotalPrice,
         });
 
-        // Re-sync slot availability so background view updates
-        loadAvailability(selectedDate, selectedDuration, viewMode);
-        fetchAvailableDatesWithDbCounts(7).then(setAvailableDates);
+        // Re-sync slot availability so background view updates in 1 round-trip
+        getBookingHubInitialDataAction(5).then((data) => {
+          if (data.success) {
+            setAvailableDates(data.dates);
+            setBookedSlotsCache(data.bookedSlotsByDate);
+            setHolidayDatesCache(data.holidayDates);
+            if (selectedDate && selectedDuration) {
+              loadAvailability(selectedDate, selectedDuration, viewMode, data.bookedSlotsByDate, data.holidayDates);
+            }
+          }
+        });
       } else {
         // Slot collision or booking error -> trigger Error Popup
         if (result.isSlotFilled) {
@@ -319,9 +380,17 @@ export default function BookingHubPage() {
               result.error ||
               `The slot (${timeRange}) on ${formattedDate} has already been booked by another player.`,
           });
-          // Refresh live slot availability immediately
-          loadAvailability(selectedDate, selectedDuration, viewMode);
-          fetchAvailableDatesWithDbCounts(7).then(setAvailableDates);
+          // Refresh live slot availability immediately in 1 round-trip
+          getBookingHubInitialDataAction(5).then((data) => {
+            if (data.success) {
+              setAvailableDates(data.dates);
+              setBookedSlotsCache(data.bookedSlotsByDate);
+              setHolidayDatesCache(data.holidayDates);
+              if (selectedDate && selectedDuration) {
+                loadAvailability(selectedDate, selectedDuration, viewMode, data.bookedSlotsByDate, data.holidayDates);
+              }
+            }
+          });
         } else {
           setErrorModal({
             isOpen: true,
@@ -364,7 +433,7 @@ export default function BookingHubPage() {
               BOOK YOUR <span className="text-[var(--red)]">STATION</span>
             </h1>
             <p className="text-sm sm:text-base text-[var(--g400)] max-w-2xl font-sans mt-3">
-              Operating on continuous 20-minute reservation blocks daily from 12:00 PM to 10:00 PM. Bookings open for today and the next 6 days (1 week rolling window).
+              Operating on continuous 20-minute reservation blocks daily from 12:00 PM to 10:00 PM. Bookings open for today and the next 4 days (5-day rolling window).
             </p>
           </div>
 
@@ -383,7 +452,7 @@ export default function BookingHubPage() {
         </div>
       </div>
 
-      {/* 7 DAYS (1 WEEK) TEASER CARDS */}
+      {/* 5 DAYS TEASER CARDS */}
       <div className="space-y-4">
         <div className="flex items-center justify-between font-mono text-xs text-[var(--g400)]">
           <div className="flex items-center gap-2">
@@ -393,7 +462,7 @@ export default function BookingHubPage() {
               }`}
             />
             <span className="text-white font-bold uppercase">AVAILABLE BOOKING DAYS</span>
-            <span>{isLoadingDates ? '(CHECKING HOLIDAYS & AVAILABILITY...)' : '(NEXT 7 DAYS / 1 WEEK)'}</span>
+            <span>{isLoadingDates ? '(CHECKING HOLIDAYS & AVAILABILITY...)' : '(NEXT 5 DAYS)'}</span>
           </div>
           <span className="text-[var(--red)] font-bold">
             {isLoadingDates ? 'SYNCHRONIZING...' : 'CLICK TO RESERVE'}
@@ -401,8 +470,8 @@ export default function BookingHubPage() {
         </div>
 
         {isLoadingDates ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            {Array.from({ length: 7 }).map((_, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
                 className="p-4 sm:p-5 rounded border border-[var(--g200)] bg-[#080808]/70 flex flex-col justify-between h-44 sm:h-48 animate-pulse font-mono"
@@ -423,7 +492,7 @@ export default function BookingHubPage() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
             {availableDates.map((item: BookingDate) => (
               <button
                 key={item.dateString}
@@ -626,15 +695,15 @@ export default function BookingHubPage() {
                         STEP 01 // CHOOSE BOOKING DATE
                       </h3>
                       <p className="text-[11px] text-[var(--g400)] mt-0.5 font-sans">
-                        Reservations are open for today and the next 6 days (1 week rolling window).
+                        Reservations are open for today and the next 4 days (5-day rolling window).
                       </p>
                     </div>
-                    <span className="text-[10px] text-[var(--red)] uppercase">7 DAYS AVAILABLE (1 WEEK)</span>
+                    <span className="text-[10px] text-[var(--red)] uppercase">5 DAYS AVAILABLE</span>
                   </div>
 
                   {isLoadingDates ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
-                      {Array.from({ length: 7 }).map((_, i) => (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3">
+                      {Array.from({ length: 5 }).map((_, i) => (
                         <div
                           key={i}
                           className="p-3 sm:p-4 rounded-xl border border-[var(--g200)] bg-[#0b0b0b] flex flex-col justify-between h-36 sm:h-40 animate-pulse font-mono"
@@ -651,7 +720,7 @@ export default function BookingHubPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3">
                       {availableDates.map((item: BookingDate) => {
                         const isSelected = selectedDate === item.dateString;
 

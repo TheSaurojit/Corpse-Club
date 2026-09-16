@@ -1,4 +1,8 @@
-import { getDbBookedSlotIndicesAction, getDbHolidaysAction } from '@/actions/booking-actions';
+import {
+  getDbBookedSlotIndicesAction,
+  getDbHolidaysAction,
+  getBookingHubInitialDataAction,
+} from '@/actions/booking-actions';
 
 export interface SlotInfo {
   index: number;
@@ -47,17 +51,32 @@ export interface TimeBlockAvailability {
   hourGroup: string;
 }
 
-// Generate successive calendar days, skipping designated holiday dates (Default: 7 days / 1 week rolling window)
-export function getAvailableDates(daysCount: number = 7, holidayDates: string[] = []): BookingDate[] {
+// Generate successive calendar days, skipping designated holiday dates (Default: 5 days rolling window)
+export function getAvailableDates(
+  daysCount: number = 5,
+  holidayDates: string[] = [],
+  baseDateStr?: string
+): BookingDate[] {
   const dates: BookingDate[] = [];
   const holidaySet = new Set(holidayDates);
-  const today = new Date();
+
+  let baseDate: Date;
+  if (baseDateStr && /^\d{4}-\d{2}-\d{2}$/.test(baseDateStr)) {
+    const parts = baseDateStr.split('-').map(Number);
+    baseDate = new Date(parts[0], parts[1] - 1, parts[2]);
+  } else {
+    baseDate = new Date();
+  }
+
+  const todayStr =
+    baseDateStr ||
+    `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-${String(baseDate.getDate()).padStart(2, '0')}`;
   let dayOffset = 0;
 
   // Search forward up to 30 days, skipping designated holidays until daysCount available days are collected
   while (dates.length < daysCount && dayOffset < 30) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + dayOffset);
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() + dayOffset);
     dayOffset++;
 
     const year = d.getFullYear();
@@ -80,7 +99,7 @@ export function getAvailableDates(daysCount: number = 7, holidayDates: string[] 
       dayName,
       dayNumber,
       monthName,
-      isToday: d.toDateString() === today.toDateString(),
+      isToday: dateString === todayStr,
       isWeekend,
       availableCount: 30,
     });
@@ -89,36 +108,21 @@ export function getAvailableDates(daysCount: number = 7, holidayDates: string[] 
   return dates;
 }
 
-// Fetch calendar dates with live available slot counts from Neon database, skipping holidays (Default: 7 days / 1 week)
-export async function fetchAvailableDatesWithDbCounts(daysCount: number = 7): Promise<BookingDate[]> {
-  // 1. Query active holidays from database
-  let holidayDates: string[] = [];
+// Fetch calendar dates with live available slot counts from Neon database, skipping holidays (Default: 5 days)
+// Batched into a single round-trip query for instantaneous loading
+export async function fetchAvailableDatesWithDbCounts(
+  daysCount: number = 5,
+  baseDateStr?: string
+): Promise<BookingDate[]> {
   try {
-    const holidayRes = await getDbHolidaysAction();
-    if (holidayRes.success && Array.isArray(holidayRes.holidayDates)) {
-      holidayDates = holidayRes.holidayDates;
+    const res = await getBookingHubInitialDataAction(daysCount, baseDateStr);
+    if (res.success && res.dates) {
+      return res.dates;
     }
   } catch (err) {
-    console.error('Error querying holidays from Neon:', err);
+    console.error('Error fetching available dates with db counts:', err);
   }
-
-  // 2. Generate dates skipping holidays
-  const dates = getAvailableDates(daysCount, holidayDates);
-
-  // 3. Query live slot counts for each available date
-  await Promise.all(
-    dates.map(async (d) => {
-      try {
-        const live = await getDbBookedSlotIndicesAction(d.dateString);
-        if (live.success && Array.isArray(live.bookedIndices)) {
-          d.availableCount = Math.max(0, 30 - live.bookedIndices.length);
-        }
-      } catch {
-        // Keep default 30
-      }
-    })
-  );
-  return dates;
+  return getAvailableDates(daysCount, [], baseDateStr);
 }
 
 // Pure helper: returns empty set (no dummy slots)
@@ -159,47 +163,30 @@ export function getSlotsForDate(dateString: string, bookedIndices?: Set<number>)
   return slots;
 }
 
-// Fetch availability strictly from Neon PostgreSQL database for a chosen date and duration
-export async function fetchAvailabilityFromDb(
+// Pure synchronous helper to calculate 20m/40m/60m/120m time blocks from booked slot indices
+export function calculateAvailabilityBlocks(
   dateString: string,
   durationMinutes: DurationMinutes,
+  bookedIndices: number[] = [],
+  isHoliday: boolean = false,
   mode: 'fixed' | 'flexible' = 'fixed'
-): Promise<{
+): {
   blocks: TimeBlockAvailability[];
   totalAvailable: number;
   totalBooked: number;
   dateString: string;
-}> {
-  const bookedSet = new Set<number>();
-
-  // If date is a holiday in Neon database, return 0 available slots immediately
-  try {
-    const holidayRes = await getDbHolidaysAction();
-    if (holidayRes.success && Array.isArray(holidayRes.holidayDates) && holidayRes.holidayDates.includes(dateString)) {
-      return {
-        blocks: [],
-        totalAvailable: 0,
-        totalBooked: 0,
-        dateString,
-      };
-    }
-  } catch (err) {
-    console.error('Error checking holiday for date in fetchAvailabilityFromDb:', err);
+} {
+  if (isHoliday) {
+    return {
+      blocks: [],
+      totalAvailable: 0,
+      totalBooked: 0,
+      dateString,
+    };
   }
 
-  // Query live booked slots from Neon PostgreSQL
-  try {
-    const liveDb = await getDbBookedSlotIndicesAction(dateString);
-    if (liveDb.success && Array.isArray(liveDb.bookedIndices)) {
-      liveDb.bookedIndices.forEach((idx) => bookedSet.add(idx));
-    }
-  } catch (err) {
-    console.error('Error fetching live booked slots from Neon:', err);
-  }
-
-  // Generate slots with only real DB bookings
+  const bookedSet = new Set<number>(bookedIndices);
   const slots = getSlotsForDate(dateString, bookedSet);
-
   const slotsNeeded = durationMinutes / 20;
   const totalSlots = slots.length;
   const blocks: TimeBlockAvailability[] = [];
@@ -246,6 +233,44 @@ export async function fetchAvailabilityFromDb(
     totalBooked,
     dateString,
   };
+}
+
+// Fetch availability strictly from Neon PostgreSQL database for a chosen date and duration
+export async function fetchAvailabilityFromDb(
+  dateString: string,
+  durationMinutes: DurationMinutes,
+  mode: 'fixed' | 'flexible' = 'fixed'
+): Promise<{
+  blocks: TimeBlockAvailability[];
+  totalAvailable: number;
+  totalBooked: number;
+  dateString: string;
+}> {
+  let isHoliday = false;
+  // If date is a holiday in Neon database, return 0 available slots immediately
+  try {
+    const holidayRes = await getDbHolidaysAction();
+    if (holidayRes.success && Array.isArray(holidayRes.holidayDates) && holidayRes.holidayDates.includes(dateString)) {
+      isHoliday = true;
+    }
+  } catch (err) {
+    console.error('Error checking holiday for date in fetchAvailabilityFromDb:', err);
+  }
+
+  const bookedIndices: number[] = [];
+  if (!isHoliday) {
+    // Query live booked slots from Neon PostgreSQL
+    try {
+      const liveDb = await getDbBookedSlotIndicesAction(dateString);
+      if (liveDb.success && Array.isArray(liveDb.bookedIndices)) {
+        bookedIndices.push(...liveDb.bookedIndices);
+      }
+    } catch (err) {
+      console.error('Error fetching live booked slots from Neon:', err);
+    }
+  }
+
+  return calculateAvailabilityBlocks(dateString, durationMinutes, bookedIndices, isHoliday, mode);
 }
 
 function formatTime(hour: number, minute: number): string {

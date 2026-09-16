@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { generate6CharBookingId } from '@/lib/booking';
+import { generate6CharBookingId, getAvailableDates, BookingDate } from '@/lib/booking';
 
 export interface CreateBookingInput {
   id: string;
@@ -101,6 +101,103 @@ function getDateStringInTimeZone(date: Date = new Date(), timeZone: string = 'As
   return `${year}-${month}-${day}`;
 }
 
+export interface BookingHubInitialData {
+  success: boolean;
+  dates: BookingDate[];
+  holidayDates: string[];
+  bookedSlotsByDate: Record<string, number[]>;
+  error?: string;
+}
+
+/**
+ * Batched server action: Fetches active holidays, computes the 5-day horizon,
+ * and fetches all booked slots across all 5 dates in a SINGLE database query round-trip.
+ */
+export async function getBookingHubInitialDataAction(
+  daysCount: number = 5,
+  baseDateStr?: string
+): Promise<BookingHubInitialData> {
+  try {
+    const refDateStr = baseDateStr || getDateStringInTimeZone(new Date(), 'Asia/Kolkata');
+
+    if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('placeholder')) {
+      const dates = getAvailableDates(daysCount, [], refDateStr);
+      return {
+        success: true,
+        dates,
+        holidayDates: [],
+        bookedSlotsByDate: {},
+      };
+    }
+
+    // 1. Fetch holidays from database in 1 query
+    let holidayDates: string[] = [];
+    if (prisma.holiday) {
+      const holidays = await prisma.holiday.findMany({
+        select: {
+          date: true,
+          reason: true,
+        },
+        orderBy: {
+          date: 'asc',
+        },
+      });
+      holidayDates = holidays.map((h) => h.date);
+    }
+
+    // 2. Generate calendar dates skipping holidays
+    const dates = getAvailableDates(daysCount, holidayDates, refDateStr);
+    const dateStrings = dates.map((d) => d.dateString);
+
+    // 3. Batch query ALL booked slots for these dates in a SINGLE database query
+    const bookedSlots = await prisma.bookedSlot.findMany({
+      where: {
+        bookingDate: {
+          in: dateStrings,
+        },
+      },
+      select: {
+        bookingDate: true,
+        slotIndex: true,
+      },
+    });
+
+    // 4. Map booked slots by date
+    const bookedSlotsByDate: Record<string, number[]> = {};
+    for (const d of dates) {
+      bookedSlotsByDate[d.dateString] = [];
+    }
+    for (const slot of bookedSlots) {
+      if (bookedSlotsByDate[slot.bookingDate]) {
+        bookedSlotsByDate[slot.bookingDate].push(slot.slotIndex);
+      }
+    }
+
+    // 5. Populate availableCount for each date
+    for (const d of dates) {
+      const bookedList = bookedSlotsByDate[d.dateString] || [];
+      d.availableCount = Math.max(0, 30 - bookedList.length);
+    }
+
+    return {
+      success: true,
+      dates,
+      holidayDates,
+      bookedSlotsByDate,
+    };
+  } catch (err: unknown) {
+    console.error('Error fetching initial booking hub data from Neon:', err);
+    const fallbackDates = getAvailableDates(daysCount, [], baseDateStr);
+    return {
+      success: false,
+      dates: fallbackDates,
+      holidayDates: [],
+      bookedSlotsByDate: {},
+      error: 'Failed to query booking hub data',
+    };
+  }
+}
+
 export async function createDbBookingAction(
   input: CreateBookingInput
 ): Promise<CreateBookingResult> {
@@ -136,14 +233,14 @@ export async function createDbBookingAction(
       }
     }
 
-    // 4. Enforce 1-week rolling booking window (Today + 6 days)
+    // 4. Enforce 5-day rolling booking window (Today + 4 days)
     const maxWindowDate = new Date();
-    maxWindowDate.setDate(maxWindowDate.getDate() + 6);
+    maxWindowDate.setDate(maxWindowDate.getDate() + 4);
     const maxWindowStr = getDateStringInTimeZone(maxWindowDate, 'Asia/Kolkata');
     if (input.bookingDate > maxWindowStr) {
       return {
         success: false,
-        error: `Booking window is strictly 1 week in advance. Maximum selectable date is ${maxWindowStr}.`,
+        error: `Booking window is strictly 5 days in advance. Maximum selectable date is ${maxWindowStr}.`,
       };
     }
 
