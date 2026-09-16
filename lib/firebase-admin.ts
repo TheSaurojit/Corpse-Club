@@ -42,50 +42,29 @@ export default getFirebaseAdminApp;
 export async function verifyFirebaseIdToken(
   idToken: string
 ): Promise<{ email: string; name?: string } | null> {
-  if (!idToken || typeof idToken !== 'string') {
+  if (!idToken || typeof idToken !== "string") {
     return null;
   }
 
-  // 1. Try Firebase Admin SDK verification
   try {
     const app = getFirebaseAdminApp();
+
     const decoded = await getAuth(app).verifyIdToken(idToken);
-    if (decoded && decoded.email) {
-      return {
-        email: decoded.email.toLowerCase().trim(),
-        name: (decoded.name as string) || undefined,
-      };
+
+    if (!decoded.email) {
+      return null;
     }
-  } catch (adminErr: unknown) {
-    console.warn('Firebase Admin SDK verification note:', (adminErr as Error)?.message);
+
+    return {
+      email: decoded.email.toLowerCase().trim(),
+      name: decoded.name || undefined,
+    };
+  } catch (error) {
+    console.error(
+      "Firebase ID token verification failed:",
+      error
+    );
+
+    return null;
   }
-
-  // 2. Fallback: Google Identity Toolkit REST verification
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
-  if (apiKey && !apiKey.includes('placeholder')) {
-    try {
-      const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-        cache: 'no-store',
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const user = data.users && data.users[0];
-        if (user && user.email) {
-          return {
-            email: user.email.toLowerCase().trim(),
-            name: user.displayName,
-          };
-        }
-      }
-    } catch (apiErr) {
-      console.error('Google Identity Toolkit verification error:', apiErr);
-    }
-  }
-
-  return null;
 }
