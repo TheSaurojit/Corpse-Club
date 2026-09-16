@@ -1,0 +1,65 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Admin {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  name            String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedBookings Booking[]
+
+  @@map("admins")
+}
+
+model Booking {
+  id             String       @id // e.g. CC-4921
+  customerName   String       @map("customer_name")
+  customerPhone  String       @map("customer_phone")
+  customerEmail  String       @map("customer_email")
+  bookingDate    String       @map("booking_date") // YYYY-MM-DD
+  startTime      String       @map("start_time")
+  endTime        String       @map("end_time")
+  durationMins   Int          @map("duration_mins")
+  controllers    Int
+  totalPrice     Int          @map("total_price")
+  status         String       @default("confirmed") // confirmed, cancelled, checked_in
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at")
+  updatedByEmail String?      @map("updated_by")
+  updatedBy      Admin?       @relation(fields: [updatedByEmail], references: [email], onDelete: SetNull)
+  slots          BookedSlot[]
+
+  @@map("bookings")
+}
+
+model BookedSlot {
+  id          Int      @id @default(autoincrement())
+  bookingId   String   @map("booking_id")
+  bookingDate String   @map("booking_date") // YYYY-MM-DD
+  slotIndex   Int      @map("slot_index") // 0 to 29 (12:00 PM to 10:00 PM)
+  podId       String   @default("pod-01") @map("pod_id")
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingDate, slotIndex, podId], name: "unique_slot_per_pod")
+  @@map("booked_slots")
+}
+
+model Holiday {
+  id        Int      @id @default(autoincrement())
+  date      String   @unique // YYYY-MM-DD
+  reason    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("holidays")
+}
