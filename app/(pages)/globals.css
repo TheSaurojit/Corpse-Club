@@ -500,3 +500,204 @@ button {
   }
 }
 
+/* ── Contact Section ─────────────────────────────────────── */
+.funk-contact {
+  background: #0e0d0c;
+  border-top: 1px solid var(--g200);
+  color: var(--white);
+  padding: clamp(80px, 12vw, 170px) clamp(22px, 9vw, 150px) clamp(70px, 10vw, 140px);
+}
+
+.funk-contact__head {
+  border-bottom: 1px solid var(--g200);
+  margin-bottom: clamp(50px, 8vw, 100px);
+  padding-bottom: 18px;
+}
+
+.funk-contact__head > span {
+  color: var(--g400);
+  display: block;
+  font: 10px/1.2 var(--font-mono);
+  letter-spacing: .14em;
+  margin-bottom: 24px;
+  text-transform: uppercase;
+}
+
+.funk-contact__head h2 {
+  color: var(--white);
+  font: 300 clamp(4.2rem, 11vw, 11rem) / .74 var(--font-sub);
+  letter-spacing: -.09em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.funk-contact__head h2 em {
+  color: var(--red);
+  font-style: normal;
+}
+
+.funk-contact__grid {
+  background: var(--g200);
+  border: 1px solid var(--g200);
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.funk-contact__card {
+  background: var(--black);
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  overflow: hidden;
+  padding: clamp(32px, 4vw, 52px) clamp(26px, 3.5vw, 44px);
+  position: relative;
+  transition: background 200ms var(--ease);
+}
+
+.funk-contact__card::after {
+  background: var(--red);
+  bottom: 0;
+  content: '';
+  height: 2px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 300ms var(--ease);
+}
+
+.funk-contact__card:hover {
+  background: var(--g100);
+}
+
+.funk-contact__card:hover::after {
+  transform: scaleX(1);
+}
+
+.funk-contact__card-top {
+  align-items: baseline;
+  border-bottom: 1px solid var(--g200);
+  display: flex;
+  gap: 16px;
+  padding-bottom: 20px;
+}
+
+.funk-contact__slot {
+  color: var(--red);
+  font: 700 clamp(2.4rem, 4vw, 4.2rem) / 1 var(--font-display);
+  letter-spacing: -.04em;
+}
+
+.funk-contact__badge {
+  color: var(--g500);
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.funk-contact__info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.funk-contact__phone {
+  color: var(--white);
+  display: inline-block;
+  font: 300 clamp(2.2rem, 3.8vw, 3.8rem) / 1 var(--font-sub);
+  letter-spacing: -.04em;
+  text-decoration: none;
+  transition: color 150ms var(--ease);
+}
+
+.funk-contact__phone:hover {
+  color: var(--red);
+}
+
+.funk-contact__info p {
+  color: var(--g400);
+  font: 14px/1.4 var(--font-sub);
+  margin: 0;
+  max-width: 38ch;
+}
+
+.funk-contact__links {
+  display: flex;
+  gap: 14px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.funk-contact__btn {
+  align-items: center;
+  background: var(--g200);
+  border: 1px solid rgba(255, 255, 255, .1);
+  color: var(--white);
+  display: inline-flex;
+  font: 11px/1 var(--font-mono);
+  gap: 12px;
+  justify-content: space-between;
+  letter-spacing: .08em;
+  padding: 14px 20px;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: all 180ms var(--ease);
+}
+
+.funk-contact__btn span {
+  color: var(--red);
+  font-size: 14px;
+  transition: transform 180ms var(--ease);
+}
+
+.funk-contact__btn:hover {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.funk-contact__btn:hover span {
+  color: #fff;
+  transform: translate(2px, -2px);
+}
+
+.funk-contact__btn--wa {
+  background: transparent;
+  border: 1px solid var(--g300);
+}
+
+.funk-contact__footer {
+  margin-top: clamp(32px, 4vw, 50px);
+  text-align: center;
+}
+
+.funk-contact__footer p {
+  color: var(--g400);
+  font: 10px/1.4 var(--font-mono);
+  letter-spacing: .1em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+@media (max-width: 780px) {
+  .funk-contact__grid {
+    grid-template-columns: 1fr;
+  }
+  .funk-contact__card {
+    gap: 22px;
+  }
+}
+
+@media (max-width: 440px) {
+  .funk-contact__links {
+    flex-direction: column;
+  }
+  .funk-contact__btn {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+

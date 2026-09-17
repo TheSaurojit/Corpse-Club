@@ -415,3 +415,34 @@ export async function updateBookingStatusAction(
     return { success: false, error: 'Failed to update booking status' };
   }
 }
+
+export async function deleteBookingAction(
+  bookingId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('placeholder')) {
+      return { success: false, error: 'Database not connected' };
+    }
+
+    const trimmedId = bookingId.trim();
+
+    // Atomic transaction: Delete child booked slots first, then the booking record
+    await prisma.$transaction(async (tx) => {
+      await tx.bookedSlot.deleteMany({
+        where: { bookingId: trimmedId },
+      });
+
+      await tx.booking.delete({
+        where: { id: trimmedId },
+      });
+    });
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error('Error deleting booking from Neon:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to delete booking from database',
+    };
+  }
+}

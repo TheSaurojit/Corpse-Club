@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   getAllBookingsForAdminAction,
   updateBookingStatusAction,
+  deleteBookingAction,
   AdminBookingRecord,
 } from "@/actions/booking-actions";
 import { getAdminSessionAction } from "@/actions/admin-auth";
@@ -19,6 +20,12 @@ export default function AdminBookingsPage() {
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [adminEmail, setAdminEmail] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Delete modal states
+  const [deleteTarget, setDeleteTarget] = useState<AdminBookingRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string>("");
+  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Fetch session and all bookings
   const loadBookings = async (showRefreshSpinner = false) => {
@@ -90,6 +97,34 @@ export default function AdminBookingsPage() {
       alert("Network error updating status.");
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  // Handle delete booking
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError("");
+
+    try {
+      const res = await deleteBookingAction(deleteTarget.id);
+      if (res.success) {
+        const deletedId = deleteTarget.id;
+        setBookings((prev) => prev.filter((b) => b.id !== deleteTarget.id));
+        setDeleteTarget(null);
+        setToastMessage({
+          type: "success",
+          text: `Booking #${deletedId.slice(0, 8).toUpperCase()} was deleted successfully.`,
+        });
+        setTimeout(() => setToastMessage(null), 4500);
+      } else {
+        setDeleteError(res.error || "Failed to delete booking from database.");
+      }
+    } catch (err: unknown) {
+      console.error("Failed to delete booking:", err);
+      setDeleteError(err instanceof Error ? err.message : "Network error deleting booking.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -466,7 +501,7 @@ export default function AdminBookingsPage() {
                   <th className="px-6 py-3.5">Hardware</th>
                   <th className="px-6 py-3.5">Amount</th>
                   <th className="px-6 py-3.5">Status</th>
-                  {/* <th className="px-6 py-3.5">Actions</th> */}
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -578,24 +613,32 @@ export default function AdminBookingsPage() {
                       </td>
 
                       {/* Actions */}
-                      {/* <td className="px-6 py-4"> */}
-                        {/* <div className="flex items-center gap-2"> */}
-                          {/* WhatsApp Chat */}
-                          {/* <a
-                            href={whatsappUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
-                            title="Message on WhatsApp"
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeleteError("");
+                            setDeleteTarget(b);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 hover:border-red-500/40 hover:text-red-300 active:scale-95 cursor-pointer"
+                          title="Delete this booking"
+                        >
+                          <svg
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
                           >
-                            <span>💬</span>
-                            <span className="hidden sm:inline">WhatsApp</span>
-                          </a> */}
-
-                          {/* View Pass */}
-                         
-                        {/* </div> */}
-                      {/* </td> */}
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                          <span>Delete</span>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -604,6 +647,140 @@ export default function AdminBookingsPage() {
           </div>
         )}
       </div>
+
+      {/* ================================================= */}
+      {/* DELETE CONFIRMATION POPUP (YES / NO) */}
+      {/* ================================================= */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-dialog-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeleting) {
+              setDeleteTarget(null);
+            }
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[#121218] p-6 shadow-2xl shadow-red-950/50 text-white relative">
+            {/* Warning Icon Badge */}
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 border border-red-500/30 text-2xl text-red-400">
+              🗑️
+            </div>
+
+            {/* Title & Subtitle */}
+            <div className="mt-4 text-center">
+              <h3 id="delete-dialog-title" className="text-lg font-bold text-white">
+                Delete This Booking?
+              </h3>
+              <p className="mt-1 text-xs text-gray-400">
+                Are you sure you want to permanently delete this reservation?
+              </p>
+            </div>
+
+            {/* Booking Details Box */}
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-xs space-y-2.5">
+              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                <span className="text-gray-400">Booking ID:</span>
+                <span className="font-mono font-bold text-purple-400">
+                  #{deleteTarget.id.toUpperCase()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Customer:</span>
+                <span className="font-semibold text-white">
+                  {deleteTarget.customerName}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Phone:</span>
+                <span className="font-mono text-gray-300">
+                  {deleteTarget.customerPhone}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Date &amp; Time:</span>
+                <span className="text-gray-200">
+                  {deleteTarget.bookingDate} ({deleteTarget.startTime} – {deleteTarget.endTime})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Station / Controllers:</span>
+                <span className="text-gray-200">
+                  Station Pod 01 • {deleteTarget.controllers} {deleteTarget.controllers === 1 ? 'Controller' : 'Controllers'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-white/5 font-semibold">
+                <span className="text-gray-400">Total Amount:</span>
+                <span className="text-emerald-400">₹{deleteTarget.totalPrice}</span>
+              </div>
+            </div>
+
+            {/* Warning Note */}
+            <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-300">
+              ⚠️ <strong>Warning:</strong> This cannot be undone. The booking will be deleted and its reserved time slots will immediately be released.
+            </div>
+
+            {/* Error Message */}
+            {deleteError && (
+              <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/15 p-3 text-xs text-red-300">
+                {deleteError}
+              </div>
+            )}
+
+            {/* Action Buttons: No / Yes */}
+            <div className="mt-6 flex items-center gap-3">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-semibold text-gray-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50 cursor-pointer"
+              >
+                No, Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="flex-1 rounded-xl border border-red-500/40 bg-red-600 py-2.5 text-xs font-semibold text-white shadow-lg shadow-red-600/30 transition hover:bg-red-500 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isDeleting ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Yes, Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border px-4 py-3 text-xs font-semibold shadow-2xl backdrop-blur-md transition-all ${
+            toastMessage.type === "success"
+              ? "border-emerald-500/30 bg-emerald-950/95 text-emerald-200 shadow-emerald-950/50"
+              : "border-red-500/30 bg-red-950/95 text-red-200 shadow-red-950/50"
+          }`}
+        >
+          <span>{toastMessage.type === "success" ? "✓" : "✕"}</span>
+          <span>{toastMessage.text}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="ml-2 text-gray-400 hover:text-white cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

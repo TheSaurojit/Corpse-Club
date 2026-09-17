@@ -1,6 +1,8 @@
 
 "use client";
 
+import Link from "next/link";
+
 const stats = [
   {
     title: "Today's Revenue",
@@ -308,9 +310,12 @@ export default function AdminDashboard() {
             </p>
           </div>
 
-          <button className="text-xs font-medium text-purple-400 hover:text-purple-300">
+          <Link
+            href="/admin/bookings"
+            className="text-xs font-medium text-purple-400 hover:text-purple-300 transition"
+          >
             View all →
-          </button>
+          </Link>
 
         </div>
 

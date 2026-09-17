@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const games = [
-  { title: 'FC 25',          type: 'Duo / Competitive',  copy: 'Settle the score in a no-excuses head-to-head session.',              image: '/assets/match-hero-2.png',    index: '01' },
-  { title: 'Tekken 8',       type: 'Duo / Fight night',  copy: 'A proper fight card deserves an OLED and a loud room.',                image: '/assets/match-hero-3.png',    index: '02' },
-  { title: 'Spider-Man 2',   type: 'Solo / Story mode',  copy: 'Drop into a world that looks better after dark.',                     image: '/assets/match-hero-squad.png', index: '03' },
-  { title: 'Mortal Kombat 1',type: 'Duo / Finish them',  copy: 'For rivalries that need a little more drama.',                        image: '/assets/match-hero-3.png',    index: '04' },
-  { title: 'Gran Turismo 7', type: 'Solo / Time trial',  copy: 'Chase lap times with every frame exactly where it should be.',        image: '/assets/match-hero-2.png',    index: '05' },
-  { title: 'God of War',     type: 'Solo / Epic mode',   copy: 'Kratos never looked this good. Ragnarök on an OLED is something else.',image: '/assets/match-hero-squad.png', index: '06' },
+  { title: 'GTA 5',          type: 'Open World / Heists',        copy: 'High-stakes heists and chaos across Los Santos on ultra-crisp 4K.',               image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/271590/library_600x900.jpg',    index: '01' },
+  { title: 'Spider-Man 2',   type: 'Solo / Action Adventure',    copy: 'Web-sling across Marvel’s New York with lightning-fast SSD traversal.',          image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2651280/library_600x900.jpg',   index: '02' },
+  { title: 'FC 26',          type: 'Duo / Competitive',         copy: 'Settle the score in a no-excuses head-to-head football showdown.',                image: 'https://image.api.playstation.com/vulcan/ap/rnd/202608/0314/d0cc38456ebe67005ebea2709f52a3d2f6780985b6403219.png',   index: '03' },
+  { title: 'Mortal Kombat',  type: 'Duo / Fight Night',          copy: 'Brutal fatalities and bone-crushing combos on low-latency displays.',             image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1971870/library_600x900.jpg',   index: '04' },
+  { title: 'It Takes Two',   type: 'Co-Op / Split Screen',       copy: 'Pure two-player chemistry. Either communicate or start over.',                   image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1426210/library_600x900.jpg',   index: '05' },
+  { title: 'WWE',       type: 'Duo / Ring Mayhem',          copy: 'Step inside the squared circle with bone-rattling slams and electric finishes.',  image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2878960/library_600x900.jpg',   index: '06' },
+  { title: 'Rocket League',  type: 'Competitive / Fast-Paced',   copy: 'Rocket-powered soccer with aerial control and 120Hz response.',                   image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/252950/library_600x900.jpg',    index: '07' },
+  { title: 'F1',             type: 'Solo & Duo / Precision Racing', copy: 'Hit every apex at 300 km/h with DualSense adaptive trigger feedback.',       image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2488620/library_600x900.jpg',   index: '08' },
 ];
 
 export default function HomePage() {
@@ -39,7 +41,7 @@ export default function HomePage() {
               <a href="#ps5"      onClick={() => setMenuOpen(false)}>PS5 Pricing</a>
               <a href="#contact"  onClick={() => setMenuOpen(false)}>Contact</a>
             </nav>
-            <div className="funk-time"><span>Next slot</span><strong>7:20 PM&nbsp; • &nbsp;Tonight</strong></div>
+            <div className="funk-time"><span></span></div>
             <Link href="/book" className="funk-book">Book now</Link>
           </div>
           <button className="funk-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label={menuOpen ? 'Close menu' : 'Open menu'} aria-expanded={menuOpen}><i /><i /></button>
@@ -54,7 +56,7 @@ export default function HomePage() {
             <p>The lights are low. The frames are high.<br />Corpse Club turns every session into a proper<br />night out — no queues, no filler, all game.</p>
             <Link href="/book" className="funk-cta"><span>Book Now</span></Link>
           </div>
-          <div className="funk-foot"><span>New Delhi / India</span><span>Corpse Club — est. 2026</span></div>
+          <div className="funk-foot"><span> India</span><span>Corpse Club — est. 2026</span></div>
         </section>
       </div>
 
@@ -90,9 +92,9 @@ export default function HomePage() {
       </section>
 
       {/* ── Rates ────────────────────────────────────────────── */}
-      <section className="funk-rates" id="contact">
+      <section className="funk-rates" id="rates">
         <div><span>03 / Walk in, power up</span><h2>KEEP IT<br /><em>SIMPLE.</em></h2></div>
-        <article className="funk-rate-card"><p>Starting from</p><strong>₹50</strong><span>per 20-minute solo session</span><hr /><div><b>Solo pod</b><em>₹50 / 20 min</em><b>Duo pod</b><em>₹80 / 20 min</em></div><Link href="/book">Find your time <i>↗</i></Link></article>
+        <article className="funk-rate-card"><p>Starting from</p><strong>₹60</strong><span>per 20-minute solo session</span><hr /><div><b>Solo pod</b><em>₹60 / 20 min</em><b>Duo pod</b><em>₹110 / 20 min</em></div><Link href="/book">Find your time <i>↗</i></Link></article>
       </section>
 
       {/* ── PS5 Pricing ───────────────────────────────────────── */}
@@ -128,8 +130,68 @@ export default function HomePage() {
         <p className="funk-ps5__note">All sessions include private pod access &amp; DualSense haptics.</p>
       </section>
 
+      {/* ── Contact ───────────────────────────────────────────── */}
+      <section className="funk-contact" id="contact" aria-labelledby="contact-title">
+        <div className="funk-contact__head">
+          <span>05 / Direct Contact &amp; Inquiries</span>
+          <h2 id="contact-title">DIRECT<br /><em>LINE.</em></h2>
+        </div>
+        <div className="funk-contact__grid">
+          <article className="funk-contact__card">
+            <div className="funk-contact__card-top">
+              <span className="funk-contact__slot">01</span>
+              <span className="funk-contact__badge">Primary Line</span>
+            </div>
+            <div className="funk-contact__info">
+              <a href="tel:+916002915136" className="funk-contact__phone">+91 60029 15136</a>
+              <p>Pod bookings, walk-in availability, and private reservations.</p>
+            </div>
+            <div className="funk-contact__links">
+              <a href="tel:+916002915136" className="funk-contact__btn">
+                Call Direct <span>↗</span>
+              </a>
+              <a
+                href="https://wa.me/916002915136"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="funk-contact__btn funk-contact__btn--wa"
+              >
+                WhatsApp <span>↗</span>
+              </a>
+            </div>
+          </article>
+
+          <article className="funk-contact__card">
+            <div className="funk-contact__card-top">
+              <span className="funk-contact__slot">02</span>
+              <span className="funk-contact__badge">Support &amp; Squads</span>
+            </div>
+            <div className="funk-contact__info">
+              <a href="tel:+919395340221" className="funk-contact__phone">+91 93953 40221</a>
+              <p>Squad sessions, multiplayer tournament inquiries, and general support.</p>
+            </div>
+            <div className="funk-contact__links">
+              <a href="tel:+919395340221" className="funk-contact__btn">
+                Call Direct <span>↗</span>
+              </a>
+              <a
+                href="https://wa.me/919395340221"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="funk-contact__btn funk-contact__btn--wa"
+              >
+                WhatsApp <span>↗</span>
+              </a>
+            </div>
+          </article>
+        </div>
+        <div className="funk-contact__footer">
+          <p>Direct lines open daily — walk-ins &amp; reservations welcome.</p>
+        </div>
+      </section>
+
       {/* ── End ──────────────────────────────────────────────── */}
-      <section className="funk-end"><span>Corpse Club / New Delhi</span><h2>MAKE IT<br /><em>COUNT.</em></h2><Link href="/book">Reserve a pod <i>↗</i></Link></section>
+      <section className="funk-end"><span>Corpse Club </span><h2>MAKE IT<br /><em>COUNT.</em></h2><Link href="/book">Reserve a pod <i>↗</i></Link></section>
     </main>
   );
 }
