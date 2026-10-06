@@ -4,12 +4,28 @@ import {
   getBookingHubInitialDataAction,
 } from '@/actions/booking-actions';
 
+export const STATIONS = [
+  { id: 'pod-01', name: 'PS5 Station 01', shortName: 'PS5-01' },
+  { id: 'pod-02', name: 'PS5 Station 02', shortName: 'PS5-02' },
+] as const;
+
+export type StationId = (typeof STATIONS)[number]['id'];
+
+// 10-minute atomic slots: 12:00 PM to 10:00 PM = 10 hours = 600 mins = 60 slots
+export const SLOT_DURATION_MINS = 10;
+export const START_HOUR = 12; // 12:00 PM
+export const END_HOUR = 22; // 10:00 PM
+export const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60; // 600 mins
+export const TOTAL_SLOTS = TOTAL_MINUTES / SLOT_DURATION_MINS; // 60 slots
+
 export interface SlotInfo {
   index: number;
   timeString: string;
   endTimeString: string;
   hourGroup: string;
   isBooked: boolean;
+  bookedPods: string[];
+  availablePodsCount: number;
 }
 
 export interface BookingDate {
@@ -22,21 +38,22 @@ export interface BookingDate {
   availableCount?: number;
 }
 
-export type DurationMinutes = 20 | 40 | 60 | 120;
+export type DurationMinutes = 20 | 40 | 60 | 120 | 180;
 
 export interface DurationOption {
   value: DurationMinutes;
   label: string;
-  slotsCount: number;
+  slotsCount: number; // number of 10-min slots
   description: string;
   badge: string;
 }
 
 export const DURATION_OPTIONS: DurationOption[] = [
-  { value: 20, label: '20 Mins', slotsCount: 1, description: '1 Continuous Slot', badge: 'QUICK RUN' },
-  { value: 40, label: '40 Mins', slotsCount: 2, description: '2 Continuous Slots', badge: 'POPULAR' },
-  { value: 60, label: '1 Hour', slotsCount: 3, description: '3 Continuous Slots', badge: 'FULL SESSION' },
-  { value: 120, label: '2 Hour', slotsCount: 6, description: '6 Continuous Slots', badge: 'MARATHON' },
+  { value: 20, label: '20 Mins', slotsCount: 2, description: '20-Minute Blitz Session', badge: 'QUICK RUN' },
+  { value: 40, label: '40 Mins', slotsCount: 4, description: '40-Minute Match Session', badge: 'POPULAR' },
+  { value: 60, label: '1 Hour', slotsCount: 6, description: '60-Minute Full Gaming Hour', badge: 'FULL SESSION' },
+  { value: 120, label: '2 Hours', slotsCount: 12, description: '120-Minute Marathon Session', badge: 'MARATHON' },
+  { value: 180, label: '3 Hours', slotsCount: 18, description: '180-Minute Tournament Pass', badge: 'PRO PASS' },
 ];
 
 export interface TimeBlockAvailability {
@@ -49,6 +66,10 @@ export interface TimeBlockAvailability {
   slotIndices: number[];
   isAvailable: boolean;
   hourGroup: string;
+  availablePodsCount: number; // 0, 1, or 2
+  pod01Available: boolean;
+  pod02Available: boolean;
+  assignedPodId: StationId | null;
 }
 
 // Generate successive calendar days, skipping designated holiday dates (Default: 5 days rolling window)
@@ -101,15 +122,14 @@ export function getAvailableDates(
       monthName,
       isToday: dateString === todayStr,
       isWeekend,
-      availableCount: 30,
+      availableCount: 120, // 60 slots * 2 stations
     });
   }
 
   return dates;
 }
 
-// Fetch calendar dates with live available slot counts from Neon database, skipping holidays (Default: 5 days)
-// Batched into a single round-trip query for instantaneous loading
+// Fetch calendar dates with live available slot counts from database, skipping holidays (Default: 5 days)
 export async function fetchAvailableDatesWithDbCounts(
   daysCount: number = 5,
   baseDateStr?: string
@@ -125,51 +145,94 @@ export async function fetchAvailableDatesWithDbCounts(
   return getAvailableDates(daysCount, [], baseDateStr);
 }
 
-// Pure helper: returns empty set (no dummy slots)
+// Pure helper: returns empty set
 export function getBookedSlotsForDate(dateString: string): Set<number> {
   return new Set<number>();
 }
 
-// Generate 30 20-minute slots from 12:00 PM to 10:00 PM
-// Total 10 hours = 600 mins = 30 slots of 20 mins
-export function getSlotsForDate(dateString: string, bookedIndices?: Set<number>): SlotInfo[] {
+// Generate 60 10-minute slots from 12:00 PM to 10:00 PM for both stations
+export function getSlotsForDate(
+  dateString: string,
+  bookedSlotsByPod?: Record<string, number[]> | Set<number>
+): SlotInfo[] {
   const slots: SlotInfo[] = [];
-  const startHour = 12; // 12:00 PM
-  const totalSlots = 30;
-  const booked = bookedIndices || new Set<number>();
 
-  for (let i = 0; i < totalSlots; i++) {
-    const totalMinutesFromStart = i * 20;
-    const slotHour = startHour + Math.floor(totalMinutesFromStart / 60);
+  let pod01Booked: Set<number>;
+  let pod02Booked: Set<number>;
+
+  if (bookedSlotsByPod instanceof Set) {
+    pod01Booked = bookedSlotsByPod;
+    pod02Booked = new Set();
+  } else if (bookedSlotsByPod) {
+    pod01Booked = new Set(bookedSlotsByPod['pod-01'] || []);
+    pod02Booked = new Set(bookedSlotsByPod['pod-02'] || []);
+  } else {
+    pod01Booked = new Set();
+    pod02Booked = new Set();
+  }
+
+  for (let i = 0; i < TOTAL_SLOTS; i++) {
+    const totalMinutesFromStart = i * SLOT_DURATION_MINS;
+    const slotHour = START_HOUR + Math.floor(totalMinutesFromStart / 60);
     const slotMinute = totalMinutesFromStart % 60;
 
-    const endTotalMinutesFromStart = (i + 1) * 20;
-    const endSlotHour = startHour + Math.floor(endTotalMinutesFromStart / 60);
+    const endTotalMinutesFromStart = (i + 1) * SLOT_DURATION_MINS;
+    const endSlotHour = START_HOUR + Math.floor(endTotalMinutesFromStart / 60);
     const endSlotMinute = endTotalMinutesFromStart % 60;
 
     const timeString = formatTime(slotHour, slotMinute);
     const endTimeString = formatTime(endSlotHour, endSlotMinute);
     const hourLabel = formatHourLabel(slotHour);
 
+    const isPod01Booked = pod01Booked.has(i);
+    const isPod02Booked = pod02Booked.has(i);
+
+    const bookedPods: string[] = [];
+    if (isPod01Booked) bookedPods.push('pod-01');
+    if (isPod02Booked) bookedPods.push('pod-02');
+
+    const availablePodsCount = 2 - bookedPods.length;
+
     slots.push({
       index: i,
       timeString,
       endTimeString,
       hourGroup: hourLabel,
-      isBooked: booked.has(i),
+      isBooked: availablePodsCount === 0,
+      bookedPods,
+      availablePodsCount,
     });
   }
 
   return slots;
 }
 
-// Pure synchronous helper to calculate 20m/40m/60m/120m time blocks from booked slot indices
+// Helper to normalize booked inputs into Sets for pod-01 and pod-02
+function normalizeBookedPods(
+  bookedInput?: Record<string, number[]> | number[] | Set<number>
+): { pod01Booked: Set<number>; pod02Booked: Set<number> } {
+  if (bookedInput instanceof Set) {
+    return { pod01Booked: bookedInput, pod02Booked: new Set() };
+  }
+  if (Array.isArray(bookedInput)) {
+    return { pod01Booked: new Set(bookedInput), pod02Booked: new Set() };
+  }
+  if (bookedInput && typeof bookedInput === 'object') {
+    return {
+      pod01Booked: new Set(bookedInput['pod-01'] || []),
+      pod02Booked: new Set(bookedInput['pod-02'] || []),
+    };
+  }
+  return { pod01Booked: new Set(), pod02Booked: new Set() };
+}
+
+// Pure synchronous helper to calculate 20m/40m/60m/120m/180m time blocks across both PS5 stations
 export function calculateAvailabilityBlocks(
   dateString: string,
   durationMinutes: DurationMinutes,
-  bookedIndices: number[] = [],
+  bookedSlotsInput?: Record<string, number[]> | number[],
   isHoliday: boolean = false,
-  mode: 'fixed' | 'flexible' = 'fixed'
+  mode: 'fixed' | 'flexible' | 'all' = 'flexible'
 ): {
   blocks: TimeBlockAvailability[];
   totalAvailable: number;
@@ -185,28 +248,50 @@ export function calculateAvailabilityBlocks(
     };
   }
 
-  const bookedSet = new Set<number>(bookedIndices);
-  const slots = getSlotsForDate(dateString, bookedSet);
-  const slotsNeeded = durationMinutes / 20;
-  const totalSlots = slots.length;
+  const { pod01Booked, pod02Booked } = normalizeBookedPods(bookedSlotsInput);
+  const slots = getSlotsForDate(dateString, {
+    'pod-01': Array.from(pod01Booked),
+    'pod-02': Array.from(pod02Booked),
+  });
+
+  const slotsNeeded = Math.round(durationMinutes / SLOT_DURATION_MINS); // e.g. 60 min -> 6 slots
+  const totalSlots = slots.length; // 60
   const blocks: TimeBlockAvailability[] = [];
 
   const durationOption = DURATION_OPTIONS.find((d) => d.value === durationMinutes);
   const durationLabel = durationOption ? durationOption.label : `${durationMinutes} Mins`;
 
-  const step = mode === 'fixed' ? slotsNeeded : 1;
+  // Step increments:
+  // 'fixed': stepped by duration (e.g. 6 slots for 60 min)
+  // 'flexible': stepped by 30 mins (3 slots) or duration if smaller
+  // 'all': stepped by 10 mins (1 slot) to allow any custom start time
+  let step = 1;
+  if (mode === 'fixed') {
+    step = Math.max(1, slotsNeeded);
+  } else if (mode === 'flexible') {
+    // 30 mins (3 slots) or 20 mins (2 slots)
+    step = durationMinutes <= 30 ? 2 : 3;
+  } else {
+    step = 1; // every 10 minutes
+  }
 
   for (let i = 0; i + slotsNeeded <= totalSlots; i += step) {
     const slotIndices: number[] = [];
-    let isAvailable = true;
-
     for (let s = 0; s < slotsNeeded; s++) {
-      const idx = i + s;
-      slotIndices.push(idx);
-      if (slots[idx].isBooked) {
-        isAvailable = false;
-      }
+      slotIndices.push(i + s);
     }
+
+    // A pod can take the session ONLY if it is completely free for all consecutive slots
+    const pod01Available = !slotIndices.some((idx) => pod01Booked.has(idx));
+    const pod02Available = !slotIndices.some((idx) => pod02Booked.has(idx));
+
+    const isAvailable = pod01Available || pod02Available;
+    const availablePodsCount = (pod01Available ? 1 : 0) + (pod02Available ? 1 : 0);
+    const assignedPodId: StationId | null = pod01Available
+      ? 'pod-01'
+      : pod02Available
+      ? 'pod-02'
+      : null;
 
     const startSlot = slots[i];
     const endSlot = slots[i + slotsNeeded - 1];
@@ -221,6 +306,10 @@ export function calculateAvailabilityBlocks(
       slotIndices,
       isAvailable,
       hourGroup: startSlot.hourGroup,
+      availablePodsCount,
+      pod01Available,
+      pod02Available,
+      assignedPodId,
     });
   }
 
@@ -235,11 +324,11 @@ export function calculateAvailabilityBlocks(
   };
 }
 
-// Fetch availability strictly from Neon PostgreSQL database for a chosen date and duration
+// Fetch availability strictly from database for a chosen date and duration
 export async function fetchAvailabilityFromDb(
   dateString: string,
   durationMinutes: DurationMinutes,
-  mode: 'fixed' | 'flexible' = 'fixed'
+  mode: 'fixed' | 'flexible' | 'all' = 'flexible'
 ): Promise<{
   blocks: TimeBlockAvailability[];
   totalAvailable: number;
@@ -247,7 +336,6 @@ export async function fetchAvailabilityFromDb(
   dateString: string;
 }> {
   let isHoliday = false;
-  // If date is a holiday in Neon database, return 0 available slots immediately
   try {
     const holidayRes = await getDbHolidaysAction();
     if (holidayRes.success && Array.isArray(holidayRes.holidayDates) && holidayRes.holidayDates.includes(dateString)) {
@@ -257,30 +345,29 @@ export async function fetchAvailabilityFromDb(
     console.error('Error checking holiday for date in fetchAvailabilityFromDb:', err);
   }
 
-  const bookedIndices: number[] = [];
+  let bookedSlotsByPod: Record<string, number[]> = { 'pod-01': [], 'pod-02': [] };
   if (!isHoliday) {
-    // Query live booked slots from Neon PostgreSQL
     try {
       const liveDb = await getDbBookedSlotIndicesAction(dateString);
-      if (liveDb.success && Array.isArray(liveDb.bookedIndices)) {
-        bookedIndices.push(...liveDb.bookedIndices);
+      if (liveDb.success && liveDb.bookedSlotsByPod) {
+        bookedSlotsByPod = liveDb.bookedSlotsByPod;
       }
     } catch (err) {
-      console.error('Error fetching live booked slots from Neon:', err);
+      console.error('Error fetching live booked slots from DB:', err);
     }
   }
 
-  return calculateAvailabilityBlocks(dateString, durationMinutes, bookedIndices, isHoliday, mode);
+  return calculateAvailabilityBlocks(dateString, durationMinutes, bookedSlotsByPod, isHoliday, mode);
 }
 
-function formatTime(hour: number, minute: number): string {
+export function formatTime(hour: number, minute: number): string {
   const period = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
   const displayMin = String(minute).padStart(2, '0');
   return `${String(displayHour).padStart(2, '0')}:${displayMin} ${period}`;
 }
 
-function formatHourLabel(hour: number): string {
+export function formatHourLabel(hour: number): string {
   const period = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
   return `${displayHour}:00 ${period}`;
@@ -304,10 +391,10 @@ export function formatSlotRange(selectedSlots: number[]): {
   const startTime = allSlots[minIndex]?.timeString || '';
   const endTime = allSlots[maxIndex]?.endTimeString || '';
 
-  const durationMinutes = sorted.length * 20;
+  const durationMinutes = sorted.length * SLOT_DURATION_MINS;
   const hours = Math.floor(durationMinutes / 60);
   const mins = durationMinutes % 60;
-  
+
   let durationHours = '';
   if (hours > 0 && mins > 0) {
     durationHours = `${hours}h ${mins}m`;
@@ -321,13 +408,14 @@ export function formatSlotRange(selectedSlots: number[]): {
 }
 
 // Official Controller Pricing Matrix in INR:
-// 1 Controller: 20m -> ₹60, 40m -> ₹130, 60m (1h) -> ₹150, 120m (2h) -> ₹300
-// 2 Controller: 20m -> ₹110, 40m -> ₹180, 60m (1h) -> ₹200, 120m (2h) -> ₹400
+// 1 Controller: 20m -> ₹60, 40m -> ₹130, 60m (1h) -> ₹150, 120m (2h) -> ₹300, 180m (3h) -> ₹450
+// 2 Controller: 20m -> ₹110, 40m -> ₹180, 60m (1h) -> ₹200, 120m (2h) -> ₹400, 180m (3h) -> ₹600
 export const PRICING_MATRIX: Record<number, { 1: number; 2: number }> = {
   20: { 1: 60, 2: 110 },
   40: { 1: 130, 2: 180 },
   60: { 1: 150, 2: 200 },
   120: { 1: 300, 2: 400 },
+  180: { 1: 450, 2: 600 },
 };
 
 export interface CustomerDetails {
@@ -341,8 +429,8 @@ export function getPriceForDuration(durationMinutes: number, controllers: number
   if (tier) {
     return controllers === 2 ? tier[2] : tier[1];
   }
-  const slots = Math.max(1, Math.round(durationMinutes / 20));
-  const baseRate = controllers === 2 ? 55 : 30;
+  const slots = Math.max(1, Math.round(durationMinutes / SLOT_DURATION_MINS));
+  const baseRate = controllers === 2 ? 35 : 25;
   return slots * baseRate;
 }
 
@@ -351,7 +439,7 @@ export function calculatePrice(slotCount: number, playerCount: number): {
   totalPrice: number;
   perHourRate: number;
 } {
-  const durationMinutes = (slotCount || 1) * 20;
+  const durationMinutes = (slotCount || 1) * SLOT_DURATION_MINS;
   const totalPrice = getPriceForDuration(durationMinutes, playerCount);
   const perSlotRate = Math.round(totalPrice / (slotCount || 1));
   const perHourRate = getPriceForDuration(60, playerCount);

@@ -34,6 +34,7 @@ model Booking {
   controllers    Int
   totalPrice     Int          @map("total_price")
   status         String       @default("confirmed") // confirmed, cancelled, checked_in
+  podId          String       @default("pod-01") @map("pod_id")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at")
   updatedByEmail String?      @map("updated_by")

@@ -18,6 +18,7 @@ export default function AdminBookingsPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [stationFilter, setStationFilter] = useState<string>("all");
   const [adminEmail, setAdminEmail] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -152,6 +153,9 @@ export default function AdminBookingsPage() {
         const matchesDate =
           dateFilter === "all" ? true : b.bookingDate === dateFilter;
 
+        const matchesStation =
+          stationFilter === "all" ? true : (b.podId || "pod-01") === stationFilter;
+
         const query = searchQuery.toLowerCase().trim();
         const matchesSearch =
           !query ||
@@ -161,7 +165,7 @@ export default function AdminBookingsPage() {
           b.id.toLowerCase().includes(query) ||
           b.bookingDate.includes(query);
 
-        return matchesStatus && matchesDate && matchesSearch;
+        return matchesStatus && matchesDate && matchesStation && matchesSearch;
       })
       .sort((a, b) => {
         // Descending order of booking date (latest date first)
@@ -170,7 +174,7 @@ export default function AdminBookingsPage() {
         // Secondary: chronological or descending start time
         return b.startTime.localeCompare(a.startTime);
       });
-  }, [bookings, statusFilter, dateFilter, searchQuery]);
+  }, [bookings, statusFilter, dateFilter, stationFilter, searchQuery]);
 
   // KPI Calculations
   const stats = useMemo(() => {
@@ -399,11 +403,34 @@ export default function AdminBookingsPage() {
                 </button>
               ))}
             </div>
+
+            <div className="hidden lg:block h-5 w-px bg-white/10" />
+
+            {/* Station Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-1">
+              {[
+                { label: "All Consoles", value: "all" },
+                { label: "PS5 - 01", value: "pod-01" },
+                { label: "PS5 - 02", value: "pod-02" },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setStationFilter(tab.value)}
+                  className={`h-9 rounded-lg px-2.5 text-xs font-semibold transition ${
+                    stationFilter === tab.value
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                      : "bg-[#15151b] text-gray-400 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Active Filter Indicators Bar */}
-        {(dateFilter !== "all" || statusFilter !== "all" || searchQuery) && (
+        {(dateFilter !== "all" || statusFilter !== "all" || stationFilter !== "all" || searchQuery) && (
           <div className="pt-2.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-gray-400">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-purple-400 font-bold text-[11px]">FILTER ACTIVE:</span>
@@ -417,6 +444,11 @@ export default function AdminBookingsPage() {
                   Status: {statusFilter}
                 </span>
               )}
+              {stationFilter !== "all" && (
+                <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-300 text-[11px]">
+                  Station: {stationFilter === "pod-02" ? "PS5 - 02" : "PS5 - 01"}
+                </span>
+              )}
               {searchQuery && (
                 <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-white text-[11px]">
                   &quot;{searchQuery}&quot;
@@ -427,6 +459,7 @@ export default function AdminBookingsPage() {
               onClick={() => {
                 setDateFilter("all");
                 setStatusFilter("all");
+                setStationFilter("all");
                 setSearchQuery("");
               }}
               className="text-[11px] text-purple-400 hover:underline cursor-pointer font-sans"
@@ -554,10 +587,22 @@ export default function AdminBookingsPage() {
                       {/* Hardware / Station */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5 font-medium text-white">
-                          <span>🎮</span>
-                          <span>Station Pod 01</span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold border ${
+                              (b.podId === "pod-02" || b.slots?.[0]?.podId === "pod-02")
+                                ? "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                                : "bg-purple-500/15 text-purple-400 border-purple-500/30"
+                            }`}
+                          >
+                            <span>🎮</span>
+                            <span>
+                              {(b.podId === "pod-02" || b.slots?.[0]?.podId === "pod-02")
+                                ? "PS5 Station 02"
+                                : "PS5 Station 01"}
+                            </span>
+                          </span>
                         </div>
-                        <div className="mt-0.5 text-gray-400">
+                        <div className="mt-1 text-xs text-gray-400">
                           {b.controllers} {b.controllers === 1 ? "Controller" : "Controllers"}
                         </div>
                       </td>
@@ -708,7 +753,11 @@ export default function AdminBookingsPage() {
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">Station / Controllers:</span>
                 <span className="text-gray-200">
-                  Station Pod 01 • {deleteTarget.controllers} {deleteTarget.controllers === 1 ? 'Controller' : 'Controllers'}
+                  {(deleteTarget.podId === "pod-02" || deleteTarget.slots?.[0]?.podId === "pod-02")
+                    ? "PS5 Station 02"
+                    : "PS5 Station 01"}{" "}
+                  • {deleteTarget.controllers}{" "}
+                  {deleteTarget.controllers === 1 ? "Controller" : "Controllers"}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-white/5 font-semibold">

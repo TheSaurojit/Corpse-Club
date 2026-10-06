@@ -25,9 +25,10 @@ export default function BookingHubPage() {
   const [isLoadingDates, setIsLoadingDates] = useState<boolean>(true);
   const [availableDates, setAvailableDates] = useState<BookingDate[]>([]);
   const [bookedSlotsCache, setBookedSlotsCache] = useState<Record<string, number[]>>({});
+  const [bookedSlotsByPodCache, setBookedSlotsByPodCache] = useState<Record<string, Record<string, number[]>>>({});
   const [holidayDatesCache, setHolidayDatesCache] = useState<string[]>([]);
 
-  // Sync live slot availability counts across 5 calendar days from Neon PostgreSQL (single-roundtrip batch)
+  // Sync live slot availability counts across 5 calendar days from database (single-roundtrip batch)
   useEffect(() => {
     setIsLoadingDates(true);
     const now = new Date();
@@ -38,21 +39,24 @@ export default function BookingHubPage() {
         if (data.success && data.dates.length > 0) {
           setAvailableDates(data.dates);
           setBookedSlotsCache(data.bookedSlotsByDate);
+          if (data.bookedSlotsByDateAndPod) {
+            setBookedSlotsByPodCache(data.bookedSlotsByDateAndPod);
+          }
           setHolidayDatesCache(data.holidayDates);
 
           const defaultDate = data.dates[0].dateString;
           setSelectedDate((prev) => (prev && data.dates.some((d) => d.dateString === prev) ? prev : defaultDate));
 
-          // Pre-calculate initial slot availability for Step 3 in memory with 0ms delay
+          // Pre-calculate initial slot availability for Step 3 in memory with 0ms delay across both PS5 pods
           const targetDate = defaultDate;
           const isHoliday = data.holidayDates.includes(targetDate);
-          const bookedIndices = data.bookedSlotsByDate[targetDate] || [];
+          const bookedPods = data.bookedSlotsByDateAndPod?.[targetDate] || { 'pod-01': [], 'pod-02': [] };
           const initialBlocks = calculateAvailabilityBlocks(
             targetDate,
-            40,
-            bookedIndices,
+            60,
+            bookedPods,
             isHoliday,
-            'fixed'
+            'all'
           );
           setAvailabilityResult(initialBlocks);
         } else {
@@ -78,10 +82,11 @@ export default function BookingHubPage() {
 
   // Wizard selections
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedDuration, setSelectedDuration] = useState<DurationMinutes | null>(40);
+  const [selectedDuration, setSelectedDuration] = useState<DurationMinutes | null>(60);
   const [selectedBlock, setSelectedBlock] = useState<TimeBlockAvailability | null>(null);
   const [selectedControllers, setSelectedControllers] = useState<number>(1);
-  const [viewMode, setViewMode] = useState<'fixed' | 'flexible'>('fixed');
+  const [viewMode, setViewMode] = useState<'fixed' | 'flexible' | 'all'>('all');
+  const [timeFilterCategory, setTimeFilterCategory] = useState<'all' | 'afternoon' | 'evening' | 'night'>('all');
 
   // Customer credentials
   const [customerName, setCustomerName] = useState<string>('');
@@ -103,6 +108,7 @@ export default function BookingHubPage() {
     duration: string;
     controllers: number;
     totalPrice: number;
+    stationName?: string;
   } | null>(null);
   const [errorModal, setErrorModal] = useState<{
     isOpen: boolean;
@@ -134,18 +140,18 @@ export default function BookingHubPage() {
   const loadAvailability = (
     dateStr: string,
     duration: DurationMinutes,
-    mode: 'fixed' | 'flexible',
-    customBookedMap?: Record<string, number[]>,
+    mode: 'fixed' | 'flexible' | 'all' = 'all',
+    customBookedMap?: Record<string, Record<string, number[]>>,
     customHolidays?: string[]
   ) => {
-    const bookedMap = customBookedMap || bookedSlotsCache;
+    const bookedPodsMap = customBookedMap || bookedSlotsByPodCache;
     const holidays = customHolidays || holidayDatesCache;
     const isHoliday = holidays.includes(dateStr);
 
     // If slot indices for this date are cached, compute immediately (0ms, 0 network requests)
-    if (bookedMap[dateStr] !== undefined) {
+    if (bookedPodsMap[dateStr] !== undefined) {
       setIsLoadingAvailability(false);
-      const res = calculateAvailabilityBlocks(dateStr, duration, bookedMap[dateStr], isHoliday, mode);
+      const res = calculateAvailabilityBlocks(dateStr, duration, bookedPodsMap[dateStr], isHoliday, mode);
       setAvailabilityResult(res);
       return;
     }
@@ -304,7 +310,7 @@ export default function BookingHubPage() {
     const durationLabel = durationOption ? durationOption.label : `${selectedDuration} Mins`;
 
     try {
-      // 2. Strict concurrency duplicate verification & atomic DB insertion
+      // 2. Strict concurrency duplicate verification & atomic DB insertion across PS5-01 and PS5-02
       const result = await createDbBookingAction({
         id: bookingId,
         customerName: customerName.trim(),
@@ -317,10 +323,12 @@ export default function BookingHubPage() {
         controllers: selectedControllers,
         totalPrice: calculatedTotalPrice,
         slotIndices: selectedBlock.slotIndices,
+        podId: selectedBlock.assignedPodId || 'pod-01',
       });
 
       if (result.success && result.bookingId) {
         const finalBookingId = result.bookingId;
+        const stationName = result.assignedPodId === 'pod-02' ? 'PS5 Station 02' : 'PS5 Station 01';
 
         // Store reservation details in localStorage for offline / pass caching
         const bookingDetails = {
@@ -335,6 +343,7 @@ export default function BookingHubPage() {
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
           customerEmail: customerEmail.trim(),
+          stationName,
           timestamp: new Date().toISOString(),
         };
 
@@ -357,6 +366,7 @@ export default function BookingHubPage() {
           duration: durationLabel,
           controllers: selectedControllers,
           totalPrice: calculatedTotalPrice,
+          stationName,
         });
 
         // Re-sync slot availability so background view updates in 1 round-trip
@@ -364,9 +374,12 @@ export default function BookingHubPage() {
           if (data.success) {
             setAvailableDates(data.dates);
             setBookedSlotsCache(data.bookedSlotsByDate);
+            if (data.bookedSlotsByDateAndPod) {
+              setBookedSlotsByPodCache(data.bookedSlotsByDateAndPod);
+            }
             setHolidayDatesCache(data.holidayDates);
             if (selectedDate && selectedDuration) {
-              loadAvailability(selectedDate, selectedDuration, viewMode, data.bookedSlotsByDate, data.holidayDates);
+              loadAvailability(selectedDate, selectedDuration, viewMode, data.bookedSlotsByDateAndPod, data.holidayDates);
             }
           }
         });
@@ -378,16 +391,19 @@ export default function BookingHubPage() {
             isSlotFilled: true,
             message:
               result.error ||
-              `The slot (${timeRange}) on ${formattedDate} has already been booked by another player.`,
+              `The slot (${timeRange}) on ${formattedDate} has already been booked on all available PS5 stations.`,
           });
           // Refresh live slot availability immediately in 1 round-trip
           getBookingHubInitialDataAction(5).then((data) => {
             if (data.success) {
               setAvailableDates(data.dates);
               setBookedSlotsCache(data.bookedSlotsByDate);
+              if (data.bookedSlotsByDateAndPod) {
+                setBookedSlotsByPodCache(data.bookedSlotsByDateAndPod);
+              }
               setHolidayDatesCache(data.holidayDates);
               if (selectedDate && selectedDuration) {
-                loadAvailability(selectedDate, selectedDuration, viewMode, data.bookedSlotsByDate, data.holidayDates);
+                loadAvailability(selectedDate, selectedDuration, viewMode, data.bookedSlotsByDateAndPod, data.holidayDates);
               }
             }
           });
@@ -579,6 +595,10 @@ export default function BookingHubPage() {
                 <span className="text-[var(--g400)]">120 Mins (2 Hours)</span>
                 <span className="font-bold text-white">₹300 INR</span>
               </div>
+              <div className="flex justify-between p-2 rounded bg-black border border-[#1a1a1a]">
+                <span className="text-[var(--g400)]">180 Mins (3 Hours)</span>
+                <span className="font-bold text-white">₹450 INR</span>
+              </div>
             </div>
           </div>
 
@@ -604,6 +624,10 @@ export default function BookingHubPage() {
               <div className="flex justify-between p-2 rounded bg-black border border-[#1a1a1a]">
                 <span className="text-[var(--g400)]">120 Mins (2 Hours)</span>
                 <span className="font-bold text-white">₹400 INR</span>
+              </div>
+              <div className="flex justify-between p-2 rounded bg-black border border-[#1a1a1a]">
+                <span className="text-[var(--g400)]">180 Mins (3 Hours)</span>
+                <span className="font-bold text-white">₹600 INR</span>
               </div>
             </div>
           </div>
@@ -786,7 +810,7 @@ export default function BookingHubPage() {
                         STEP 02 // CHOOSE SESSION MINUTES
                       </h3>
                       <p className="text-[11px] text-[var(--g400)] mt-0.5 font-sans">
-                        Only these 4 verified time duration presets are supported for PS5 console pods.
+                        Choose from 20m, 40m, 60m (1h), 120m (2h), or 180m (3h) continuous sessions on our PS5 console stations.
                       </p>
                     </div>
                     <span className="text-[10px] text-[var(--red)] font-bold">
@@ -794,7 +818,7 @@ export default function BookingHubPage() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                     {DURATION_OPTIONS.map((opt) => {
                       const isSelected = selectedDuration === opt.value;
 
@@ -802,14 +826,14 @@ export default function BookingHubPage() {
                         <button
                           key={opt.value}
                           onClick={() => handleSelectDuration(opt.value)}
-                          className={`p-5 rounded-xl border text-left transition-all relative flex flex-col justify-between h-36 cursor-none ${
+                          className={`p-4 sm:p-5 rounded-xl border text-left transition-all relative flex flex-col justify-between h-40 cursor-none ${
                             isSelected
                               ? 'bg-[#18080a] border-[var(--red)] shadow-[0_0_25px_rgba(255,0,0,0.5)] scale-[1.02]'
                               : 'bg-[#0b0b0b] border-[var(--g200)] hover:border-[var(--g300)] hover:bg-[#121212]'
                           }`}
                         >
                           <div className="flex items-center justify-between w-full">
-                            <span className="text-[9px] uppercase px-2 py-0.5 rounded bg-[var(--g100)] text-[var(--g400)]">
+                            <span className="text-[9px] uppercase px-2 py-0.5 rounded bg-[var(--g100)] text-[var(--g400)] font-bold">
                               {opt.badge}
                             </span>
                             {isSelected && (
@@ -817,20 +841,20 @@ export default function BookingHubPage() {
                             )}
                           </div>
 
-                          <div>
+                          <div className="my-1">
                             <div
                               style={{ fontFamily: 'var(--font-display)' }}
-                              className={`text-3xl font-black uppercase ${isSelected ? 'text-[var(--red)]' : 'text-white'}`}
+                              className={`text-2xl sm:text-3xl font-black uppercase ${isSelected ? 'text-[var(--red)]' : 'text-white'}`}
                             >
                               {opt.label}
                             </div>
-                            <div className="text-[10px] text-[var(--g400)] mt-0.5 font-sans">
+                            <div className="text-[10px] text-[var(--g400)] mt-0.5 font-sans leading-tight">
                               {opt.description}
                             </div>
                           </div>
 
                           <div className="pt-2 border-t border-[var(--g200)] flex items-center justify-between text-[10px] text-[var(--g400)]">
-                            <span>{opt.slotsCount * 20} Mins</span>
+                            <span className="font-mono">{opt.value} Mins</span>
                             <span className={isSelected ? 'text-[var(--red)] font-bold' : ''}>
                               {isSelected ? 'SELECTED' : 'CHOOSE →'}
                             </span>
@@ -842,87 +866,181 @@ export default function BookingHubPage() {
                 </div>
               )}
 
-              {/* STEP 3: REAL-TIME TIME SLOTS FROM DATABASE */}
+              {/* STEP 3: CLICKABLE VISUAL TIMELINE */}
               {currentStep === 3 && (
-                <div className="space-y-4 animate-fadeIn">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="space-y-6 animate-fadeIn">
+                  {/* Step Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--g200)] pb-3">
                     <div>
-                      <h3 className="text-base font-bold text-white uppercase">
-                        STEP 03 // REAL-TIME ARENA TIME SLOTS
+                      <h3 className="text-base font-bold text-white uppercase flex items-center gap-2">
+                        <span>STEP 03 // CLICKABLE VISUAL TIMELINE</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-[var(--red)] text-white font-mono font-bold">
+                          2 PS5 STATIONS
+                        </span>
                       </h3>
                       <p className="text-[11px] text-[var(--g400)] mt-0.5">
-                        Displaying slot availability starting from 12:00 PM on {formatDateDisplay(selectedDate)} for {selectedDuration} Mins.
+                        Choose your session on {formatDateDisplay(selectedDate)} for {selectedDuration} Mins. Click any slot directly on the console timeline or slot cards below.
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleToggleViewMode}
-                        className="px-2.5 py-1 rounded bg-[#160608] text-[var(--red)] border border-[var(--red)]/40 hover:bg-[var(--red)] hover:text-white transition-all text-[10px] cursor-none"
-                      >
-                        {viewMode === 'fixed' ? 'MODE: STANDARD BLOCKS' : 'MODE: ALL START TIMES (20M)'}
-                      </button>
+                    {/* Legend */}
+                    <div className="flex items-center gap-3 text-[10px] font-mono shrink-0">
+                      <span className="flex items-center gap-1 text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400" /> 2 PS5s Available
+                      </span>
+                      <span className="flex items-center gap-1 text-amber-400">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" /> 1 PS5 Available
+                      </span>
+                      <span className="flex items-center gap-1 text-red-500">
+                        <span className="w-2 h-2 rounded-full bg-red-500" /> Booked
+                      </span>
                     </div>
                   </div>
 
                   {isLoadingAvailability ? (
-                    <div className="p-10 rounded border border-[var(--g200)] bg-[#0c0c0c] text-center space-y-3">
+                    <div className="p-10 rounded-xl border border-[var(--g200)] bg-[#0c0c0c] text-center space-y-3 font-mono">
                       <div className="w-8 h-8 mx-auto border-2 border-[var(--red)] border-t-transparent rounded-full animate-spin" />
-                      <div className="text-white font-bold uppercase">QUERYING ARENA DATABASE...</div>
-                      <div className="text-[10px] text-[var(--g400)]">Retrieving real-time reservations for {selectedDate}</div>
+                      <div className="text-white font-bold uppercase">QUERYING DUAL PS5 SCHEDULE...</div>
+                      <div className="text-[10px] text-[var(--g400)]">Retrieving real-time reservations for Station 01 and Station 02</div>
                     </div>
                   ) : availabilityResult ? (
-                    <div className="space-y-3">
-                      <div className="p-2.5 rounded bg-[#0b0b0b] border border-[var(--g200)] flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-3">
-                          <span className="text-emerald-400 font-bold">● {availabilityResult.totalAvailable} Open</span>
-                          <span className="text-[var(--g400)]">● {availabilityResult.totalBooked} Booked</span>
+                    <div className="space-y-6 font-mono">
+
+                      {/* CLICKABLE VISUAL TIMELINE SCHEDULE */}
+                      <div className="p-4 sm:p-5 rounded-xl border border-[var(--g200)] bg-[#090909] space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--g200)] pb-2.5">
+                          <div>
+                            <span className="text-xs uppercase font-bold text-white flex items-center gap-1.5">
+                              <span>📊</span>
+                              <span>CLICKABLE VISUAL TIMELINE // 12:00 PM – 10:00 PM</span>
+                            </span>
+                            <span className="text-[10px] text-[var(--g400)] block mt-0.5">
+                              Real-time availability of both PS5 Station 01 &amp; Station 02. Click any slot to select.
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            {(['all', 'afternoon', 'evening', 'night'] as const).map((cat) => (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => setTimeFilterCategory(cat)}
+                                className={`px-2.5 py-1 rounded text-[9px] uppercase font-bold transition ${
+                                  timeFilterCategory === cat
+                                    ? 'bg-[var(--red)] text-white'
+                                    : 'bg-[#151515] text-[var(--g400)] hover:text-white border border-[#262626]'
+                                }`}
+                              >
+                                {cat === 'all'
+                                  ? 'ALL'
+                                  : cat === 'afternoon'
+                                  ? '12–4 PM'
+                                  : cat === 'evening'
+                                  ? '4–8 PM'
+                                  : '8–10 PM'}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <span className="text-[var(--g400)] text-[10px]">12:00 PM – 10:00 PM Slots</span>
+
+                        {/* Interactive Session Cards Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                          {availabilityResult.blocks
+                            .filter((block) => {
+                              if (timeFilterCategory === 'all') return true;
+                              const startIdx = block.slotIndices[0];
+                              if (timeFilterCategory === 'afternoon') return startIdx < 24;
+                              if (timeFilterCategory === 'evening') return startIdx >= 24 && startIdx < 48;
+                              if (timeFilterCategory === 'night') return startIdx >= 48;
+                              return true;
+                            })
+                            .map((block) => {
+                              const isSelected = selectedBlock?.id === block.id;
+                              const isAvailable = block.isAvailable;
+
+                              return (
+                                <button
+                                  key={block.id}
+                                  disabled={!isAvailable}
+                                  onClick={() => setSelectedBlock(block)}
+                                  className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between h-24 cursor-none ${
+                                    !isAvailable
+                                      ? 'bg-[#0f0f0f] border-[#1f1f1f] text-[#444] cursor-not-allowed line-through opacity-45'
+                                      : isSelected
+                                      ? 'bg-[var(--red)] border-[var(--red)] text-white shadow-[0_0_20px_rgba(255,0,0,0.6)] font-bold scale-[1.02]'
+                                      : 'bg-[#0b0b0b] border-[var(--g200)] text-white hover:border-[var(--red)] hover:bg-[#15080a]'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between w-full">
+                                    <div>
+                                      <div className="text-xs sm:text-sm font-bold tracking-tight">
+                                        {block.startTime}
+                                      </div>
+                                      <div className="text-[10px] opacity-75 mt-0.5">
+                                        until {block.endTime}
+                                      </div>
+                                    </div>
+                                    <span
+                                      className={`text-[8px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                                        !isAvailable
+                                          ? 'bg-[#1a1a1a] text-[#555]'
+                                          : isSelected
+                                          ? 'bg-black text-white'
+                                          : block.availablePodsCount === 2
+                                          ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-500/40'
+                                          : 'bg-amber-950/80 text-amber-300 border border-amber-500/40'
+                                      }`}
+                                    >
+                                      {!isAvailable
+                                        ? 'BOOKED'
+                                        : isSelected
+                                        ? 'CHOSEN ✓'
+                                        : block.availablePodsCount === 2
+                                        ? '2 AVAILABLE'
+                                        : '1 AVAILABLE'}
+                                    </span>
+                                  </div>
+
+                                  <div className="pt-1.5 border-t border-[var(--g200)]/40 flex items-center justify-between text-[9px] opacity-85">
+                                    <span>{block.durationLabel}</span>
+                                    <span>
+                                      {block.isAvailable
+                                        ? block.availablePodsCount === 2
+                                          ? 'PS5-01 & 02 Available'
+                                          : block.pod01Available
+                                          ? 'PS5-01 Available'
+                                          : 'PS5-02 Available'
+                                        : 'All Stations Busy'}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 max-h-72 overflow-y-auto pr-1">
-                        {availabilityResult.blocks.map((block) => {
-                          const isSelected = selectedBlock?.id === block.id;
-                          const isAvailable = block.isAvailable;
+                      {/* 3. LIVE SELECTED STATION ALLOCATION BOX */}
+                      {selectedBlock && (
+                        <div className="p-4 rounded-xl border border-emerald-500/40 bg-[#08150f] text-emerald-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_20px_rgba(16,185,129,0.15)] animate-fadeIn">
+                          <div className="space-y-1">
+                            <div className="font-bold uppercase flex items-center gap-2 text-white">
+                              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                              <span>SELECTION CONFIRMED: {selectedBlock.startTime} → {selectedBlock.endTime} ({selectedBlock.durationLabel})</span>
+                            </div>
+                            <div className="text-[11px] text-emerald-300 font-sans">
+                              Allocated to: <strong className="text-white font-mono">{selectedBlock.assignedPodId === 'pod-02' ? 'PS5 Station 02' : 'PS5 Station 01'}</strong> ({selectedBlock.availablePodsCount === 2 ? 'Both consoles available' : '1 console available'}).
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleNextStep}
+                            className="px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-mono text-xs font-bold uppercase tracking-wider shrink-0 cursor-none transition-all"
+                          >
+                            Proceed to Hardware →
+                          </button>
+                        </div>
+                      )}
 
-                          return (
-                            <button
-                              key={block.id}
-                              disabled={!isAvailable}
-                              onClick={() => setSelectedBlock(block)}
-                              className={`p-3 rounded border text-left transition-all flex flex-col justify-between h-24 cursor-none ${
-                                !isAvailable
-                                  ? 'bg-[#0f0f0f] border-[#1f1f1f] text-[#444] cursor-not-allowed line-through opacity-50'
-                                  : isSelected
-                                  ? 'bg-[var(--red)] border-[var(--red)] text-white shadow-[0_0_20px_rgba(255,0,0,0.6)] font-bold'
-                                  : 'bg-[#0b0b0b] border-[var(--g200)] text-white hover:border-[var(--red)] hover:bg-[#15080a]'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between w-full">
-                                <div>
-                                  <div className="text-xs sm:text-sm font-bold">{block.startTime}</div>
-                                  <div className="text-[10px] opacity-75">until {block.endTime}</div>
-                                </div>
-                                <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold ${
-                                  !isAvailable
-                                    ? 'bg-[#1a1a1a] text-[#555]'
-                                    : isSelected
-                                    ? 'bg-black text-white'
-                                    : 'bg-[#1c080a] text-[var(--red)] border border-[var(--red)]/40'
-                                }`}>
-                                  {!isAvailable ? 'BOOKED' : isSelected ? 'CHOSEN ✓' : 'OPEN'}
-                                </span>
-                              </div>
-
-                              <div className="pt-1.5 border-t border-[var(--g200)]/40 flex items-center justify-between text-[9px] opacity-80">
-                                <span>{block.durationLabel}</span>
-                                <span>Slot #{String(block.slotIndices[0] + 1).padStart(2, '0')}</span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -1057,7 +1175,7 @@ export default function BookingHubPage() {
                   </div>
 
                   {/* Summary Ticket */}
-                  <div className="p-4 rounded-xl border border-[var(--g200)] bg-[#0b0b0b] grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-4 rounded-xl border border-[var(--g200)] bg-[#0b0b0b] grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                     <div>
                       <span className="text-[var(--g400)]">Date:</span>
                       <div className="font-bold text-white mt-0.5">{formatDateDisplay(selectedDate)}</div>
@@ -1072,6 +1190,12 @@ export default function BookingHubPage() {
                       <span className="text-[var(--g400)]">Session:</span>
                       <div className="font-bold text-white mt-0.5">
                         {selectedDuration} Mins ({selectedControllers} Controller{selectedControllers > 1 ? 's' : ''})
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[var(--g400)]">Station:</span>
+                      <div className="font-bold text-emerald-400 mt-0.5">
+                        {selectedBlock?.assignedPodId === 'pod-02' ? 'PS5 Station 02' : 'PS5 Station 01'}
                       </div>
                     </div>
                     <div>
@@ -1255,7 +1379,7 @@ export default function BookingHubPage() {
               <div className="flex justify-between items-center">
                 <span className="text-gray-400">Hardware & Controllers</span>
                 <span className="font-bold text-white">
-                  Pod 01 • {successModal.controllers} {successModal.controllers > 1 ? 'Controllers' : 'Controller'} ({successModal.duration})
+                  {successModal.stationName || 'PS5 Station 01'} • {successModal.controllers} {successModal.controllers > 1 ? 'Controllers' : 'Controller'} ({successModal.duration})
                 </span>
               </div>
               <div className="flex justify-between items-center border-t border-white/10 pt-2.5 text-sm">

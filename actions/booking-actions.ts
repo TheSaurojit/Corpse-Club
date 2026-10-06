@@ -20,10 +20,15 @@ export interface CreateBookingInput {
 
 export async function getDbBookedSlotIndicesAction(
   dateString: string
-): Promise<{ success: boolean; bookedIndices: number[]; error?: string }> {
+): Promise<{
+  success: boolean;
+  bookedIndices: number[];
+  bookedSlotsByPod: Record<string, number[]>;
+  error?: string;
+}> {
   try {
     if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('placeholder')) {
-      return { success: false, bookedIndices: [] };
+      return { success: false, bookedIndices: [], bookedSlotsByPod: { 'pod-01': [], 'pod-02': [] } };
     }
 
     const bookedSlots = await prisma.bookedSlot.findMany({
@@ -32,14 +37,38 @@ export async function getDbBookedSlotIndicesAction(
       },
       select: {
         slotIndex: true,
+        podId: true,
       },
     });
 
-    const indices = bookedSlots.map((b) => b.slotIndex);
-    return { success: true, bookedIndices: indices };
+    const bookedSlotsByPod: Record<string, number[]> = {
+      'pod-01': [],
+      'pod-02': [],
+    };
+    const allIndices: number[] = [];
+
+    for (const b of bookedSlots) {
+      const p = b.podId || 'pod-01';
+      if (!bookedSlotsByPod[p]) {
+        bookedSlotsByPod[p] = [];
+      }
+      bookedSlotsByPod[p].push(b.slotIndex);
+      allIndices.push(b.slotIndex);
+    }
+
+    return {
+      success: true,
+      bookedIndices: allIndices,
+      bookedSlotsByPod,
+    };
   } catch (err: unknown) {
-    console.error('Error fetching booked slots from Neon:', err);
-    return { success: false, bookedIndices: [], error: 'Failed to query database' };
+    console.error('Error fetching booked slots from database:', err);
+    return {
+      success: false,
+      bookedIndices: [],
+      bookedSlotsByPod: { 'pod-01': [], 'pod-02': [] },
+      error: 'Failed to query database',
+    };
   }
 }
 
@@ -74,7 +103,7 @@ export async function getDbHolidaysAction(): Promise<{
       holidayDates: holidays.map((h) => h.date),
     };
   } catch (err: unknown) {
-    console.error('Error fetching holidays from Neon:', err);
+    console.error('Error fetching holidays from database:', err);
     return { success: false, holidays: [], holidayDates: [], error: 'Failed to query holidays' };
   }
 }
@@ -82,6 +111,7 @@ export async function getDbHolidaysAction(): Promise<{
 export interface CreateBookingResult {
   success: boolean;
   bookingId?: string;
+  assignedPodId?: string;
   isSlotFilled?: boolean;
   error?: string;
 }
@@ -106,12 +136,13 @@ export interface BookingHubInitialData {
   dates: BookingDate[];
   holidayDates: string[];
   bookedSlotsByDate: Record<string, number[]>;
+  bookedSlotsByDateAndPod: Record<string, Record<string, number[]>>;
   error?: string;
 }
 
 /**
  * Batched server action: Fetches active holidays, computes the 5-day horizon,
- * and fetches all booked slots across all 5 dates in a SINGLE database query round-trip.
+ * and fetches all booked slots for both PS5 stations across all 5 dates in a SINGLE database query round-trip.
  */
 export async function getBookingHubInitialDataAction(
   daysCount: number = 5,
@@ -127,6 +158,7 @@ export async function getBookingHubInitialDataAction(
         dates,
         holidayDates: [],
         bookedSlotsByDate: {},
+        bookedSlotsByDateAndPod: {},
       };
     }
 
@@ -149,7 +181,7 @@ export async function getBookingHubInitialDataAction(
     const dates = getAvailableDates(daysCount, holidayDates, refDateStr);
     const dateStrings = dates.map((d) => d.dateString);
 
-    // 3. Batch query ALL booked slots for these dates in a SINGLE database query
+    // 3. Batch query ALL booked slots for these dates across both stations in a SINGLE database query
     const bookedSlots = await prisma.bookedSlot.findMany({
       where: {
         bookingDate: {
@@ -159,24 +191,44 @@ export async function getBookingHubInitialDataAction(
       select: {
         bookingDate: true,
         slotIndex: true,
+        podId: true,
       },
     });
 
-    // 4. Map booked slots by date
+    // 4. Map booked slots by date and by station pod
     const bookedSlotsByDate: Record<string, number[]> = {};
+    const bookedSlotsByDateAndPod: Record<string, Record<string, number[]>> = {};
+
     for (const d of dates) {
       bookedSlotsByDate[d.dateString] = [];
+      bookedSlotsByDateAndPod[d.dateString] = {
+        'pod-01': [],
+        'pod-02': [],
+      };
     }
+
     for (const slot of bookedSlots) {
-      if (bookedSlotsByDate[slot.bookingDate]) {
-        bookedSlotsByDate[slot.bookingDate].push(slot.slotIndex);
+      const dateKey = slot.bookingDate;
+      const pId = slot.podId || 'pod-01';
+
+      if (bookedSlotsByDateAndPod[dateKey]) {
+        if (!bookedSlotsByDateAndPod[dateKey][pId]) {
+          bookedSlotsByDateAndPod[dateKey][pId] = [];
+        }
+        bookedSlotsByDateAndPod[dateKey][pId].push(slot.slotIndex);
+      }
+
+      if (bookedSlotsByDate[dateKey]) {
+        bookedSlotsByDate[dateKey].push(slot.slotIndex);
       }
     }
 
-    // 5. Populate availableCount for each date
+    // 5. Populate availableCount for each date: Total capacity is 60 slots * 2 stations = 120 slot units
     for (const d of dates) {
-      const bookedList = bookedSlotsByDate[d.dateString] || [];
-      d.availableCount = Math.max(0, 30 - bookedList.length);
+      const p1Booked = bookedSlotsByDateAndPod[d.dateString]?.['pod-01']?.length || 0;
+      const p2Booked = bookedSlotsByDateAndPod[d.dateString]?.['pod-02']?.length || 0;
+      const totalBooked = p1Booked + p2Booked;
+      d.availableCount = Math.max(0, 120 - totalBooked);
     }
 
     return {
@@ -184,15 +236,17 @@ export async function getBookingHubInitialDataAction(
       dates,
       holidayDates,
       bookedSlotsByDate,
+      bookedSlotsByDateAndPod,
     };
   } catch (err: unknown) {
-    console.error('Error fetching initial booking hub data from Neon:', err);
+    console.error('Error fetching initial booking hub data from database:', err);
     const fallbackDates = getAvailableDates(daysCount, [], baseDateStr);
     return {
       success: false,
       dates: fallbackDates,
       holidayDates: [],
       bookedSlotsByDate: {},
+      bookedSlotsByDateAndPod: {},
       error: 'Failed to query booking hub data',
     };
   }
@@ -244,29 +298,57 @@ export async function createDbBookingAction(
       };
     }
 
-    const podId = input.podId || 'pod-01';
-
     // Ensure 6-character alphanumeric booking ID
     let finalId = (input.id || '').toUpperCase().trim();
     if (!/^[A-Z0-9]{6}$/.test(finalId)) {
       finalId = generate6CharBookingId();
     }
 
-    // Atomic transaction: verify slots are not already booked, then insert
+    let finalAssignedPodId = 'pod-01';
+
+    // Atomic transaction: verify station availability across pod-01 & pod-02, assign free pod, and insert
     await prisma.$transaction(async (tx) => {
-      // 1. Strict Duplicate Verification: Check if any requested slot is already reserved
-      const existingBookedSlots = await tx.bookedSlot.findMany({
+      // 1. Check existing reservations for pod-01 and pod-02 on requested slot indices
+      const p1Conflicts = await tx.bookedSlot.findMany({
         where: {
           bookingDate: input.bookingDate,
-          podId,
+          podId: 'pod-01',
           slotIndex: {
             in: input.slotIndices,
           },
         },
       });
 
-      if (existingBookedSlots.length > 0) {
-        throw new Error('SLOT_ALREADY_FILLED');
+      const p2Conflicts = await tx.bookedSlot.findMany({
+        where: {
+          bookingDate: input.bookingDate,
+          podId: 'pod-02',
+          slotIndex: {
+            in: input.slotIndices,
+          },
+        },
+      });
+
+      // Smart routing: prefer requested pod if free; otherwise fallback to other pod
+      const p1Free = p1Conflicts.length === 0;
+      const p2Free = p2Conflicts.length === 0;
+
+      if (input.podId === 'pod-02') {
+        if (p2Free) {
+          finalAssignedPodId = 'pod-02';
+        } else if (p1Free) {
+          finalAssignedPodId = 'pod-01';
+        } else {
+          throw new Error('SLOT_ALREADY_FILLED');
+        }
+      } else {
+        if (p1Free) {
+          finalAssignedPodId = 'pod-01';
+        } else if (p2Free) {
+          finalAssignedPodId = 'pod-02';
+        } else {
+          throw new Error('SLOT_ALREADY_FILLED');
+        }
       }
 
       // 2. Ensure ID uniqueness (regenerate if 6-char collision occurs)
@@ -277,7 +359,7 @@ export async function createDbBookingAction(
         finalId = generate6CharBookingId();
       }
 
-      // 3. Insert the Booking and create the locked slots
+      // 3. Insert the Booking with assigned podId and lock the atomic slots
       await tx.booking.create({
         data: {
           id: finalId,
@@ -291,23 +373,23 @@ export async function createDbBookingAction(
           controllers: input.controllers,
           totalPrice: input.totalPrice,
           status: 'confirmed',
+          podId: finalAssignedPodId,
           slots: {
             create: input.slotIndices.map((idx) => ({
               bookingDate: input.bookingDate,
               slotIndex: idx,
-              podId,
+              podId: finalAssignedPodId,
             })),
           },
         },
       });
     });
 
-    return { success: true, bookingId: finalId };
+    return { success: true, bookingId: finalId, assignedPodId: finalAssignedPodId };
   } catch (err: unknown) {
-    console.error('Error creating booking in Neon:', err);
+    console.error('Error creating booking in database:', err);
     const errMsg = err instanceof Error ? err.message : String(err);
 
-    // Specifically detect duplicate slot collision or unique constraint violation
     const isSlotFilled =
       errMsg.includes('SLOT_ALREADY_FILLED') ||
       (err as { code?: string })?.code === 'P2002' ||
@@ -318,7 +400,7 @@ export async function createDbBookingAction(
       return {
         success: false,
         isSlotFilled: true,
-        error: 'The selected slot has already been reserved by another player. Please choose another time.',
+        error: 'Both PS5 Stations are fully reserved for this requested timeframe. Please choose another time slot.',
       };
     }
 
@@ -342,6 +424,7 @@ export interface AdminBookingRecord {
   controllers: number;
   totalPrice: number;
   status: string;
+  podId: string;
   createdAt: Date;
   updatedAt: Date;
   updatedByEmail?: string | null;
@@ -384,9 +467,15 @@ export async function getAllBookingsForAdminAction(): Promise<{
       },
     });
 
-    return { success: true, bookings };
+    return {
+      success: true,
+      bookings: bookings.map((b) => ({
+        ...b,
+        podId: b.podId || b.slots?.[0]?.podId || 'pod-01',
+      })),
+    };
   } catch (err: unknown) {
-    console.error('Error fetching admin bookings from Neon:', err);
+    console.error('Error fetching admin bookings from database:', err);
     return { success: false, bookings: [], error: 'Failed to fetch bookings' };
   }
 }
@@ -439,7 +528,7 @@ export async function deleteBookingAction(
 
     return { success: true };
   } catch (err: unknown) {
-    console.error('Error deleting booking from Neon:', err);
+    console.error('Error deleting booking from database:', err);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Failed to delete booking from database',

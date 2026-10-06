@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: corpseclub_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: corpseclub
+    ports:
+      - "5433:5432"
+    volumes:
+      - corpseclub_pgdata:/var/lib/postgresql/data
+
+volumes:
+  corpseclub_pgdata:
