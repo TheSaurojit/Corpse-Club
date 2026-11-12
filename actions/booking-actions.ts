@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { generate6CharBookingId, getAvailableDates, BookingDate } from '@/lib/booking';
+import { generate6CharBookingId, getAvailableDates, BookingDate, parseTimeToMinutes } from '@/lib/booking';
 
 export interface CreateBookingInput {
   id: string;
@@ -448,7 +448,6 @@ export async function getAllBookingsForAdminAction(): Promise<{
     const bookings = await prisma.booking.findMany({
       orderBy: [
         { bookingDate: 'desc' },
-        { startTime: 'desc' },
         { createdAt: 'desc' },
       ],
       include: {
@@ -467,12 +466,29 @@ export async function getAllBookingsForAdminAction(): Promise<{
       },
     });
 
-    return {
-      success: true,
-      bookings: bookings.map((b) => ({
+    const sortedBookings = bookings
+      .map((b) => ({
         ...b,
         podId: b.podId || b.slots?.[0]?.podId || 'pod-01',
-      })),
+      }))
+      .sort((a, b) => {
+        
+        // 1. Descending by bookingDate (latest calendar date first)
+        const dateComp = b.bookingDate.localeCompare(a.bookingDate);
+        if (dateComp !== 0) return dateComp;
+
+        // 2. Descending by startTime chronologically (e.g. 9:00 PM -> 3:00 PM -> 12:00 PM)
+        const timeA = parseTimeToMinutes(a.startTime);
+        const timeB = parseTimeToMinutes(b.startTime);
+        if (timeB !== timeA) return timeB - timeA;
+
+        // 3. Fallback: newest booking record first
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+
+    return {
+      success: true,
+      bookings: sortedBookings,
     };
   } catch (err: unknown) {
     console.error('Error fetching admin bookings from database:', err);

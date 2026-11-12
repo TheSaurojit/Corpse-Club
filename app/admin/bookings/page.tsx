@@ -9,6 +9,7 @@ import {
   AdminBookingRecord,
 } from "@/actions/booking-actions";
 import { getAdminSessionAction } from "@/actions/admin-auth";
+import { parseTimeToMinutes } from "@/lib/booking";
 
 export default function AdminBookingsPage() {
   const [bookings, setBookings] = useState<AdminBookingRecord[]>([]);
@@ -42,6 +43,8 @@ export default function AdminBookingsPage() {
         getAdminSessionAction(),
         getAllBookingsForAdminAction(),
       ]);
+
+      
 
       if (session.isAuthenticated && session.email) {
         setAdminEmail(session.email);
@@ -171,8 +174,11 @@ export default function AdminBookingsPage() {
         // Descending order of booking date (latest date first)
         const dateComp = b.bookingDate.localeCompare(a.bookingDate);
         if (dateComp !== 0) return dateComp;
-        // Secondary: chronological or descending start time
-        return b.startTime.localeCompare(a.startTime);
+        // Secondary: chronological descending start time (latest time first, e.g. 9pm -> 3pm -> 12pm)
+        const timeA = parseTimeToMinutes(a.startTime);
+        const timeB = parseTimeToMinutes(b.startTime);
+        if (timeB !== timeA) return timeB - timeA;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [bookings, statusFilter, dateFilter, stationFilter, searchQuery]);
 

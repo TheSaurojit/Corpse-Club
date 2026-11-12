@@ -373,6 +373,20 @@ export function formatHourLabel(hour: number): string {
   return `${displayHour}:00 ${period}`;
 }
 
+export function parseTimeToMinutes(timeStr: string): number {
+  if (!timeStr) return 0;
+  const match = timeStr.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return 0;
+  let hour = parseInt(match[1], 10);
+  const minute = match[2] ? parseInt(match[2], 10) : 0;
+  const period = match[3]?.toUpperCase();
+
+  if (period === 'PM' && hour < 12) hour += 12;
+  if (period === 'AM' && hour === 12) hour = 0;
+
+  return hour * 60 + minute;
+}
+
 export function formatSlotRange(selectedSlots: number[]): {
   startTime: string;
   endTime: string;
