@@ -773,7 +773,7 @@ export default function AdminBillingCreatePage() {
               <div className="rounded-2xl border border-white/10 bg-[#111116]/90 p-5 shadow-xl backdrop-blur-xl">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
-                    2. PS5 Gaming Pod Sessions
+                    2. PS5 Gaming Pod Sessions (OPTIONAL)
                   </span>
                  
                 </div>
@@ -890,7 +890,7 @@ export default function AdminBillingCreatePage() {
               <div className="rounded-2xl border border-white/10 bg-[#111116]/90 p-5 shadow-xl backdrop-blur-xl">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-400">
-                    3. Cafe Menu Items
+                    3. Cafe Menu Items (OPTIONAL)
                   </span>
                   <span className="text-[11px] text-gray-500">
                     {menuItems.length} menu items available
@@ -969,7 +969,7 @@ export default function AdminBillingCreatePage() {
               <div className="rounded-2xl border border-white/10 bg-[#111116]/90 p-5 shadow-xl backdrop-blur-xl">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-blue-400">
-                    4. Custom / Ad-Hoc Items
+                    4. Miscellaneous Costs (OPTIONAL)
                   </span>
                   <span className="text-[11px] text-gray-500">Out-of-menu items</span>
                 </div>
