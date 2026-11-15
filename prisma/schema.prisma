@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../lib/generated/prisma"
@@ -18,6 +16,8 @@ model Admin {
   name            String?
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedBookings Booking[]
+  bills           Bill[]
+  expenses        Expense[]
 
   @@map("admins")
 }
@@ -63,4 +63,94 @@ model Holiday {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("holidays")
+}
+
+model MenuItem {
+  id          Int        @id @default(autoincrement())
+  name        String
+  category    String     // e.g. "Beverages", "Snacks", "Coffee", "Combos", "Food"
+  price       Int        // in INR
+  description String?
+  isAvailable Boolean    @default(true) @map("is_available")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @default(now()) @map("updated_at")
+
+  billItems   BillItem[]
+
+  @@map("menu_items")
+}
+
+model Bill {
+  id             String           @id // e.g. "CC-B-1001"
+  customerName   String           @map("customer_name")
+  adminId        Int?             @map("admin_id")
+  admin          Admin?           @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdByEmail String?          @map("created_by")
+
+  cashAmount     Int              @default(0) @map("cash_amount")
+  onlineAmount   Int              @default(0) @map("online_amount")
+  discount       Int              @default(0)
+  subtotal       Int              @default(0)
+  totalAmount    Int              @map("total_amount")
+  paymentStatus  String           @default("paid") @map("payment_status") // paid, partial, pending
+  
+  ps5Amount      Int              @default(0) @map("ps5_amount")
+  cafeAmount     Int              @default(0) @map("cafe_amount")
+  customAmount   Int              @default(0) @map("custom_amount")
+  notes          String?
+
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @default(now()) @map("updated_at")
+
+  sessions       BillPs5Session[]
+  items          BillItem[]
+
+  @@map("bills")
+}
+
+model BillPs5Session {
+  id         Int      @id @default(autoincrement())
+  billId     String   @map("bill_id")
+  controller String   // "single" or "dual"
+  duration   Int      // 20, 40, 60 mins
+  unitPrice  Int      @map("unit_price") // e.g. 60, 130, 150, 110, 180, 200
+  quantity   Int      @default(1)
+  total      Int      // unitPrice * quantity
+
+  bill       Bill     @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@map("bill_ps5_sessions")
+}
+
+model BillItem {
+  id         Int       @id @default(autoincrement())
+  billId     String    @map("bill_id")
+  menuItemId Int?      @map("menu_item_id")
+  name       String    // Snapshot of item name
+  price      Int       // Snapshot of unit price
+  quantity   Int       @default(1)
+  total      Int       // price * quantity
+  isCustom   Boolean   @default(false) @map("is_custom")
+
+  bill       Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
+  menuItem   MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+
+  @@map("bill_items")
+}
+
+model Expense {
+  id             Int      @id @default(autoincrement())
+  title          String
+  amount         Int      // in INR
+  date           String   // YYYY-MM-DD
+  method         String   // "cash" or "online"
+  category       String?  // e.g. "Inventory", "Utilities", "Maintenance", "Staff", "Other"
+  notes          String?
+  adminId        Int?     @map("admin_id")
+  admin          Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdByEmail String?  @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @default(now()) @map("updated_at")
+
+  @@map("expenses")
 }

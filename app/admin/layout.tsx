@@ -24,21 +24,26 @@ const navigation = [
     href: "/admin/bookings",
     icon: "◷",
   },
-  // {
-  //   name: "Stations",
-  //   href: "/admin/stations",
-  //   icon: "▣",
-  // },
-  // {
-  //   name: "Customers",
-  //   href: "/admin/customers",
-  //   icon: "♙",
-  // },
-  // {
-  //   name: "Revenue",
-  //   href: "/admin/revenue",
-  //   icon: "₹",
-  // },
+  {
+    name: "Billing",
+    href: "/admin/billing",
+    icon: "🧾",
+  },
+  {
+    name: "Cafe Menu",
+    href: "/admin/menu",
+    icon: "☕",
+  },
+  {
+    name: "Expenses",
+    href: "/admin/expenses",
+    icon: "💸",
+  },
+  {
+    name: "Bank & Ledger",
+    href: "/admin/bank",
+    icon: "🏦",
+  },
 ];
 
 export default function AdminLayout({
