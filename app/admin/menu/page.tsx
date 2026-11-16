@@ -217,17 +217,17 @@ export default function AdminMenuPage() {
   };
 
   // Seed sample menu
-  const handleSeedMenu = async () => {
-    setIsLoading(true);
-    const res = await seedDefaultMenuAction();
-    if (res.success) {
-      showToast(`Seeded ${res.count} cafe menu items!`);
-      loadMenu();
-    } else {
-      showToast(res.error || "Failed to seed menu", "error");
-      setIsLoading(false);
-    }
-  };
+  // const handleSeedMenu = async () => {
+  //   setIsLoading(true);
+  //   const res = await seedDefaultMenuAction();
+  //   if (res.success) {
+  //     showToast(`Seeded ${res.count} cafe menu items!`);
+  //     loadMenu();
+  //   } else {
+  //     showToast(res.error || "Failed to seed menu", "error");
+  //     setIsLoading(false);
+  //   }
+  // };
 
   return (
     <div className="space-y-8">
@@ -264,7 +264,7 @@ export default function AdminMenuPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {items.length === 0 && !isLoading && (
+          {/* {items.length === 0 && !isLoading && (
             <button
               type="button"
               onClick={handleSeedMenu}
@@ -273,7 +273,7 @@ export default function AdminMenuPage() {
               <span>🌱</span>
               <span>Load Sample Menu</span>
             </button>
-          )}
+          )} */}
 
           <button
             type="button"
