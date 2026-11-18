@@ -477,6 +477,12 @@ export interface AdminBookingRecord {
     email: string;
     name?: string | null;
   } | null;
+  isCalled: boolean;
+  calledByEmail?: string | null;
+  calledBy?: {
+    email: string;
+    name?: string | null;
+  } | null;
   slots: Array<{ slotIndex: number; podId: string }>;
 }
 
@@ -497,6 +503,12 @@ export async function getAllBookingsForAdminAction(): Promise<{
       ],
       include: {
         updatedBy: {
+          select: {
+            email: true,
+            name: true,
+          },
+        },
+        calledBy: {
           select: {
             email: true,
             name: true,
@@ -588,6 +600,31 @@ export async function updateBookingPaymentStatusAction(
   } catch (err: unknown) {
     console.error('Error updating booking payment status:', err);
     return { success: false, error: 'Failed to update booking payment status' };
+  }
+}
+
+export async function toggleBookingCalledStatusAction(
+  bookingId: string,
+  isCalled: boolean,
+  adminEmail: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('placeholder')) {
+      return { success: false, error: 'Database not connected' };
+    }
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        isCalled,
+        calledByEmail: isCalled ? adminEmail.toLowerCase().trim() : null,
+      },
+    });
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error('Error updating booking call status:', err);
+    return { success: false, error: 'Failed to update call status' };
   }
 }
 

@@ -15,7 +15,8 @@ model Admin {
   email             String                  @unique
   name              String?
   createdAt         DateTime                @default(now()) @map("created_at")
-  updatedBookings   Booking[]
+  updatedBookings   Booking[]               @relation("AdminUpdatedBookings")
+  calledBookings    Booking[]               @relation("AdminCalledBookings")
   bills             Bill[]
   expenses          Expense[]
   pushSubscriptions AdminPushSubscription[]
@@ -40,9 +41,15 @@ model Booking {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at")
   updatedByEmail String?      @map("updated_by")
-  updatedBy      Admin?       @relation(fields: [updatedByEmail], references: [email], onDelete: SetNull)
+  updatedBy      Admin?       @relation("AdminUpdatedBookings", fields: [updatedByEmail], references: [email], onDelete: SetNull)
+  
+  isCalled       Boolean      @default(false) @map("is_called")
+  calledByEmail  String?      @map("called_by_admin")
+  calledBy       Admin?       @relation("AdminCalledBookings", fields: [calledByEmail], references: [email], onDelete: SetNull)
+
   slots          BookedSlot[]
 
+  @@index([isCalled])
   @@map("bookings")
 }
 

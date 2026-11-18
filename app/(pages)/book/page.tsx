@@ -861,7 +861,7 @@ export default function BookingHubPage() {
                       </h3>
                       <p className="text-[11px] text-[var(--g400)] mt-0.5 font-sans">
                         {isGta6EventDate(selectedDate)
-                          ? 'GTA 6 Special: Choose 1 Hour, 2 Hours, or 3 Hours PS5 gaming sessions at ₹300/hour (controllers included).'
+                          ? 'GTA 6 Special: Choose 1 Hour (₹299), 2 Hours (₹599), or 3 Hours (₹899) PS5 gaming sessions (controllers included).'
                           : 'Choose from 20m, 40m, 60m (1h), 120m (2h), or 180m (3h) continuous sessions on our PS5 console stations.'}
                       </p>
                     </div>

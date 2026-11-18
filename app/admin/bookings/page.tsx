@@ -6,6 +6,7 @@ import {
   getAllBookingsForAdminAction,
   updateBookingStatusAction,
   updateBookingPaymentStatusAction,
+  toggleBookingCalledStatusAction,
   deleteBookingAction,
   AdminBookingRecord,
 } from "@/actions/booking-actions";
@@ -22,9 +23,12 @@ export default function AdminBookingsPage() {
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [stationFilter, setStationFilter] = useState<string>("all");
   const [paymentFilter, setPaymentFilter] = useState<string>("all");
+  const [calledFilter, setCalledFilter] = useState<string>("all");
   const [adminEmail, setAdminEmail] = useState<string>("");
+  const [adminName, setAdminName] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
+  const [updatingCalledId, setUpdatingCalledId] = useState<string | null>(null);
 
   // Delete modal states
   const [deleteTarget, setDeleteTarget] = useState<AdminBookingRecord | null>(null);
@@ -51,6 +55,7 @@ export default function AdminBookingsPage() {
 
       if (session.isAuthenticated && session.email) {
         setAdminEmail(session.email);
+        setAdminName(session.name || "Admin");
       }
 
       if (bookingsRes.success && bookingsRes.bookings) {
@@ -141,6 +146,46 @@ export default function AdminBookingsPage() {
     }
   };
 
+  // Handle call status toggle (Called <-> Uncalled)
+  const handleToggleCalled = async (bookingId: string, currentStatus: boolean) => {
+    setUpdatingCalledId(bookingId);
+    const newStatus = !currentStatus;
+
+    // Optimistic UI update
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? {
+              ...b,
+              isCalled: newStatus,
+              calledByEmail: newStatus ? adminEmail : null,
+              calledBy: newStatus
+                ? { email: adminEmail, name: adminName || adminEmail.split("@")[0] }
+                : null,
+            }
+          : b
+      )
+    );
+
+    try {
+      const res = await toggleBookingCalledStatusAction(
+        bookingId,
+        newStatus,
+        adminEmail || "admin@corpseclub.com"
+      );
+      if (!res.success) {
+        alert(res.error || "Failed to update call status.");
+        loadBookings(true);
+      }
+    } catch (err) {
+      console.error("Failed to update call status:", err);
+      alert("Network error updating call status.");
+      loadBookings(true);
+    } finally {
+      setUpdatingCalledId(null);
+    }
+  };
+
   // Handle delete booking
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
@@ -201,6 +246,13 @@ export default function AdminBookingsPage() {
             ? true
             : (b.paymentStatus || "paid").toLowerCase() === paymentFilter.toLowerCase();
 
+        const matchesCalled =
+          calledFilter === "all"
+            ? true
+            : calledFilter === "called"
+            ? b.isCalled === true
+            : !b.isCalled;
+
         const query = searchQuery.toLowerCase().trim();
         const matchesSearch =
           !query ||
@@ -210,7 +262,7 @@ export default function AdminBookingsPage() {
           b.id.toLowerCase().includes(query) ||
           b.bookingDate.includes(query);
 
-        return matchesStatus && matchesDate && matchesStation && matchesPayment && matchesSearch;
+        return matchesStatus && matchesDate && matchesStation && matchesPayment && matchesCalled && matchesSearch;
       })
       .sort((a, b) => {
         // Descending order of booking date (latest date first)
@@ -222,7 +274,7 @@ export default function AdminBookingsPage() {
         if (timeB !== timeA) return timeB - timeA;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [bookings, statusFilter, dateFilter, stationFilter, paymentFilter, searchQuery]);
+  }, [bookings, statusFilter, dateFilter, stationFilter, paymentFilter, calledFilter, searchQuery]);
 
   // KPI Calculations
   const stats = useMemo(() => {
@@ -231,11 +283,12 @@ export default function AdminBookingsPage() {
     const checkedIn = bookings.filter((b) => b.status === "checked_in").length;
     const completed = bookings.filter((b) => b.status === "completed").length;
     const pendingPayment = bookings.filter((b) => (b.paymentStatus || "paid").toLowerCase() === "pending").length;
+    const uncalledCount = bookings.filter((b) => !b.isCalled && b.status !== "cancelled").length;
     const revenue = bookings
       .filter((b) => b.status !== "cancelled")
       .reduce((sum, b) => sum + (b.totalPrice || 0), 0);
 
-    return { total, confirmed, checkedIn, completed, pendingPayment, revenue };
+    return { total, confirmed, checkedIn, completed, pendingPayment, uncalledCount, revenue };
   }, [bookings]);
 
   // Helpers
@@ -498,11 +551,34 @@ export default function AdminBookingsPage() {
                 </button>
               ))}
             </div>
+
+            <div className="hidden lg:block h-5 w-px bg-white/10" />
+
+            {/* Call Status Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-1">
+              {[
+                { label: "All Calls", value: "all" },
+                { label: `📞 Needs Call (${stats.uncalledCount})`, value: "uncalled" },
+                { label: "✓ Called", value: "called" },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setCalledFilter(tab.value)}
+                  className={`h-9 rounded-lg px-2.5 text-xs font-semibold transition cursor-pointer ${
+                    calledFilter === tab.value
+                      ? "bg-amber-600 text-white shadow-md shadow-amber-500/20"
+                      : "bg-[#15151b] text-gray-400 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Active Filter Indicators Bar */}
-        {(dateFilter !== "all" || statusFilter !== "all" || stationFilter !== "all" || paymentFilter !== "all" || searchQuery) && (
+        {(dateFilter !== "all" || statusFilter !== "all" || stationFilter !== "all" || paymentFilter !== "all" || calledFilter !== "all" || searchQuery) && (
           <div className="pt-2.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-gray-400">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-purple-400 font-bold text-[11px]">FILTER ACTIVE:</span>
@@ -519,6 +595,11 @@ export default function AdminBookingsPage() {
               {paymentFilter !== "all" && (
                 <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 capitalize text-[11px]">
                   Payment: {paymentFilter}
+                </span>
+              )}
+              {calledFilter !== "all" && (
+                <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 capitalize text-[11px]">
+                  Call: {calledFilter === "uncalled" ? "Needs Call" : "Called"}
                 </span>
               )}
               {stationFilter !== "all" && (
@@ -538,6 +619,7 @@ export default function AdminBookingsPage() {
                 setStatusFilter("all");
                 setStationFilter("all");
                 setPaymentFilter("all");
+                setCalledFilter("all");
                 setSearchQuery("");
               }}
               className="text-[11px] text-purple-400 hover:underline cursor-pointer font-sans"
@@ -607,7 +689,7 @@ export default function AdminBookingsPage() {
                   <th className="px-6 py-3.5">
                     ID / Date <span className="text-purple-400 font-bold">↓ (Latest First)</span>
                   </th>
-                  <th className="px-6 py-3.5">Player Details</th>
+                  <th className="px-6 py-3.5">Customer & Call Status</th>
                   <th className="px-6 py-3.5">Session Time</th>
                   <th className="px-6 py-3.5">Hardware</th>
                   <th className="px-6 py-3.5">Amount</th>
@@ -640,16 +722,52 @@ export default function AdminBookingsPage() {
                         </div>
                       </td>
 
-                      {/* Customer Details */}
+                      {/* Customer Details & Call Verification */}
                       <td className="px-6 py-4">
                         <div className="font-semibold text-white">{b.customerName}</div>
                         <div className="mt-0.5 flex items-center gap-1.5 text-gray-400">
                           <span>📞</span>
-                          <span>{b.customerPhone}</span>
+                          <a
+                            href={`tel:${b.customerPhone}`}
+                            className="hover:text-purple-400 transition-colors font-mono"
+                          >
+                            {b.customerPhone}
+                          </a>
                         </div>
-                        {b.customerEmail && (
-                          <div className="text-[11px] text-gray-500">{b.customerEmail}</div>
-                        )}
+                      
+
+                        {/* Call Status Badge & Toggle */}
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={updatingCalledId === b.id}
+                            onClick={() => handleToggleCalled(b.id, b.isCalled)}
+                            title={
+                              b.isCalled
+                                ? `Marked called by ${b.calledBy?.name || b.calledByEmail || "Admin"}. Click to undo if marked by mistake.`
+                                : "Customer has not been called yet. Click to mark as called."
+                            }
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition cursor-pointer border ${
+                              b.isCalled
+                                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25"
+                                : "bg-amber-500/10 text-amber-300 border-amber-500/25 hover:bg-amber-500/20"
+                            }`}
+                          >
+                            <span>{b.isCalled ? "✓ Called" : "📞 Mark Called"}</span>
+                            {updatingCalledId === b.id && (
+                              <span className="h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" />
+                            )}
+                          </button>
+
+                          {b.isCalled && (
+                            <span
+                              className="text-[10px] text-gray-400 truncate max-w-[120px]"
+                              title={`Called by ${b.calledBy?.name || b.calledByEmail || "Admin"}`}
+                            >
+                              by {b.calledBy?.name || (b.calledByEmail ? b.calledByEmail.split("@")[0] : "Admin")}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Session Time */}

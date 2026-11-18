@@ -45,4 +45,4 @@ next-env.d.ts
 .env
 admin-sdk.json
 
-*.sql
+neon_init.sql

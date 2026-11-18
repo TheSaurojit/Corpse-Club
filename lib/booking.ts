@@ -486,11 +486,11 @@ export const PRICING_MATRIX: Record<number, { 1: number; 2: number }> = {
   180: { 1: 450, 2: 600 },
 };
 
-// GTA 6 Launch Special Pricing in INR: ₹300 / hour flat rate (controllers included)
+// GTA 6 Launch Special Pricing in INR: ₹299 (1h), ₹599 (2h), ₹899 (3h) (controllers included)
 export const GTA6_PRICING: Record<number, number> = {
-  60: 300,
-  120: 600,
-  180: 900,
+  60: 299,
+  120: 599,
+  180: 899,
 };
 
 export interface CustomerDetails {
@@ -508,7 +508,11 @@ export function getPriceForDuration(
     if (GTA6_PRICING[durationMinutes]) {
       return GTA6_PRICING[durationMinutes];
     }
-    return Math.round((durationMinutes / 60) * 300);
+    const hours = Math.round(durationMinutes / 60);
+    if (hours === 1) return 299;
+    if (hours === 2) return 599;
+    if (hours === 3) return 899;
+    return hours * 299;
   }
 
   const tier = PRICING_MATRIX[durationMinutes];
