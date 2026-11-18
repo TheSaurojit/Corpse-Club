@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   getAllBookingsForAdminAction,
   updateBookingStatusAction,
+  updateBookingPaymentStatusAction,
   deleteBookingAction,
   AdminBookingRecord,
 } from "@/actions/booking-actions";
@@ -20,8 +21,10 @@ export default function AdminBookingsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [stationFilter, setStationFilter] = useState<string>("all");
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
   const [adminEmail, setAdminEmail] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updatingPaymentId, setUpdatingPaymentId] = useState<string | null>(null);
 
   // Delete modal states
   const [deleteTarget, setDeleteTarget] = useState<AdminBookingRecord | null>(null);
@@ -104,6 +107,40 @@ export default function AdminBookingsPage() {
     }
   };
 
+  // Handle payment status toggle (Paid <-> Pending)
+  const handlePaymentStatusChange = async (bookingId: string, newPaymentStatus: string) => {
+    setUpdatingPaymentId(bookingId);
+    try {
+      const res = await updateBookingPaymentStatusAction(
+        bookingId,
+        newPaymentStatus,
+        adminEmail || "admin@corpseclub.com"
+      );
+      if (res.success) {
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId
+              ? {
+                  ...b,
+                  paymentStatus: newPaymentStatus,
+                  updatedAt: new Date(),
+                  updatedByEmail: adminEmail,
+                  updatedBy: { email: adminEmail, name: "Admin" },
+                }
+              : b
+          )
+        );
+      } else {
+        alert(res.error || "Failed to update payment status.");
+      }
+    } catch (err) {
+      console.error("Failed to update payment status:", err);
+      alert("Network error updating payment status.");
+    } finally {
+      setUpdatingPaymentId(null);
+    }
+  };
+
   // Handle delete booking
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
@@ -159,6 +196,11 @@ export default function AdminBookingsPage() {
         const matchesStation =
           stationFilter === "all" ? true : (b.podId || "pod-01") === stationFilter;
 
+        const matchesPayment =
+          paymentFilter === "all"
+            ? true
+            : (b.paymentStatus || "paid").toLowerCase() === paymentFilter.toLowerCase();
+
         const query = searchQuery.toLowerCase().trim();
         const matchesSearch =
           !query ||
@@ -168,7 +210,7 @@ export default function AdminBookingsPage() {
           b.id.toLowerCase().includes(query) ||
           b.bookingDate.includes(query);
 
-        return matchesStatus && matchesDate && matchesStation && matchesSearch;
+        return matchesStatus && matchesDate && matchesStation && matchesPayment && matchesSearch;
       })
       .sort((a, b) => {
         // Descending order of booking date (latest date first)
@@ -180,7 +222,7 @@ export default function AdminBookingsPage() {
         if (timeB !== timeA) return timeB - timeA;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [bookings, statusFilter, dateFilter, stationFilter, searchQuery]);
+  }, [bookings, statusFilter, dateFilter, stationFilter, paymentFilter, searchQuery]);
 
   // KPI Calculations
   const stats = useMemo(() => {
@@ -188,11 +230,12 @@ export default function AdminBookingsPage() {
     const confirmed = bookings.filter((b) => b.status === "confirmed").length;
     const checkedIn = bookings.filter((b) => b.status === "checked_in").length;
     const completed = bookings.filter((b) => b.status === "completed").length;
+    const pendingPayment = bookings.filter((b) => (b.paymentStatus || "paid").toLowerCase() === "pending").length;
     const revenue = bookings
       .filter((b) => b.status !== "cancelled")
       .reduce((sum, b) => sum + (b.totalPrice || 0), 0);
 
-    return { total, confirmed, checkedIn, completed, revenue };
+    return { total, confirmed, checkedIn, completed, pendingPayment, revenue };
   }, [bookings]);
 
   // Helpers
@@ -432,11 +475,34 @@ export default function AdminBookingsPage() {
                 </button>
               ))}
             </div>
+
+            <div className="hidden lg:block h-5 w-px bg-white/10" />
+
+            {/* Payment Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-1">
+              {[
+                { label: "All Payments", value: "all" },
+                { label: "Paid", value: "paid" },
+                { label: "Pending", value: "pending" },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setPaymentFilter(tab.value)}
+                  className={`h-9 rounded-lg px-2.5 text-xs font-semibold transition ${
+                    paymentFilter === tab.value
+                      ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
+                      : "bg-[#15151b] text-gray-400 hover:bg-white/5 hover:text-white"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Active Filter Indicators Bar */}
-        {(dateFilter !== "all" || statusFilter !== "all" || stationFilter !== "all" || searchQuery) && (
+        {(dateFilter !== "all" || statusFilter !== "all" || stationFilter !== "all" || paymentFilter !== "all" || searchQuery) && (
           <div className="pt-2.5 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-gray-400">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-purple-400 font-bold text-[11px]">FILTER ACTIVE:</span>
@@ -448,6 +514,11 @@ export default function AdminBookingsPage() {
               {statusFilter !== "all" && (
                 <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-white capitalize text-[11px]">
                   Status: {statusFilter}
+                </span>
+              )}
+              {paymentFilter !== "all" && (
+                <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 capitalize text-[11px]">
+                  Payment: {paymentFilter}
                 </span>
               )}
               {stationFilter !== "all" && (
@@ -466,6 +537,7 @@ export default function AdminBookingsPage() {
                 setDateFilter("all");
                 setStatusFilter("all");
                 setStationFilter("all");
+                setPaymentFilter("all");
                 setSearchQuery("");
               }}
               className="text-[11px] text-purple-400 hover:underline cursor-pointer font-sans"
@@ -613,12 +685,40 @@ export default function AdminBookingsPage() {
                         </div>
                       </td>
 
-                      {/* Amount */}
+                      {/* Amount & Payment Status */}
                       <td className="px-6 py-4">
                         <div className="font-bold text-white sm:text-sm">
                           ₹{b.totalPrice}
                         </div>
-                        <div className="text-[10px] text-emerald-400">Paid / Verified</div>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={updatingPaymentId === b.id}
+                            onClick={() =>
+                              handlePaymentStatusChange(
+                                b.id,
+                                (b.paymentStatus || "paid").toLowerCase() === "paid"
+                                  ? "pending"
+                                  : "paid"
+                              )
+                            }
+                            title="Click to toggle Payment Status (Paid / Pending)"
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase transition cursor-pointer ${
+                              (b.paymentStatus || "paid").toLowerCase() === "paid"
+                                ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+                                : "bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25"
+                            }`}
+                          >
+                            <span>
+                              {(b.paymentStatus || "paid").toLowerCase() === "paid"
+                                ? "✓ Paid"
+                                : "⏳ Pending"}
+                            </span>
+                            {updatingPaymentId === b.id && (
+                              <span className="h-2 w-2 animate-spin rounded-full border border-current border-t-transparent" />
+                            )}
+                          </button>
+                        </div>
                       </td>
 
                       {/* Status Switcher */}

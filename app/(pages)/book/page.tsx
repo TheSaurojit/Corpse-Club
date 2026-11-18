@@ -14,6 +14,11 @@ import {
   formatDateDisplay,
   getPriceForDuration,
   generate6CharBookingId,
+  isGta6EventDate,
+  getDurationOptionsForDate,
+  getOperatingHoursForDate,
+  GTA6_START_DATE,
+  GTA6_END_DATE,
 } from '@/lib/booking';
 import {
   createDbBookingAction,
@@ -28,13 +33,13 @@ export default function BookingHubPage() {
   const [bookedSlotsByPodCache, setBookedSlotsByPodCache] = useState<Record<string, Record<string, number[]>>>({});
   const [holidayDatesCache, setHolidayDatesCache] = useState<string[]>([]);
 
-  // Sync live slot availability counts across 5 calendar days from database (single-roundtrip batch)
+  // Sync live slot availability counts across calendar horizon (14 days for GTA 6 window)
   useEffect(() => {
     setIsLoadingDates(true);
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    getBookingHubInitialDataAction(5, todayStr)
+    getBookingHubInitialDataAction(14, todayStr)
       .then((data) => {
         if (data.success && data.dates.length > 0) {
           setAvailableDates(data.dates);
@@ -60,14 +65,14 @@ export default function BookingHubPage() {
           );
           setAvailabilityResult(initialBlocks);
         } else {
-          const fallback = getAvailableDates(5, [], todayStr);
+          const fallback = getAvailableDates(14, [], todayStr);
           setAvailableDates(fallback);
           if (fallback.length > 0) setSelectedDate(fallback[0].dateString);
         }
       })
       .catch((err) => {
         console.error('Error fetching initial booking hub data:', err);
-        const fallback = getAvailableDates(5, [], todayStr);
+        const fallback = getAvailableDates(14, [], todayStr);
         setAvailableDates(fallback);
         if (fallback.length > 0) setSelectedDate(fallback[0].dateString);
       })
@@ -87,6 +92,7 @@ export default function BookingHubPage() {
   const [selectedControllers, setSelectedControllers] = useState<number>(1);
   const [viewMode, setViewMode] = useState<'fixed' | 'flexible' | 'all'>('all');
   const [timeFilterCategory, setTimeFilterCategory] = useState<'all' | 'afternoon' | 'evening' | 'night'>('all');
+  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'paid'>('pending');
 
   // Customer credentials
   const [customerName, setCustomerName] = useState<string>('');
@@ -109,6 +115,7 @@ export default function BookingHubPage() {
     controllers: number;
     totalPrice: number;
     stationName?: string;
+    paymentStatus?: string;
   } | null>(null);
   const [errorModal, setErrorModal] = useState<{
     isOpen: boolean;
@@ -173,17 +180,23 @@ export default function BookingHubPage() {
     setSelectedDate(dateStr);
     setCurrentStep(1);
     setIsModalOpen(true);
-    if (selectedDuration) {
-      loadAvailability(dateStr, selectedDuration, viewMode);
+    let dur = selectedDuration || 60;
+    if (isGta6EventDate(dateStr) && (dur === 20 || dur === 40)) {
+      dur = 60;
+      setSelectedDuration(60);
     }
+    loadAvailability(dateStr, dur, viewMode);
   };
 
   const handleSelectDate = (dateStr: string) => {
     setSelectedDate(dateStr);
     setSelectedBlock(null);
-    if (selectedDuration) {
-      loadAvailability(dateStr, selectedDuration, viewMode);
+    let dur = selectedDuration || 60;
+    if (isGta6EventDate(dateStr) && (dur === 20 || dur === 40)) {
+      dur = 60;
+      setSelectedDuration(60);
     }
+    loadAvailability(dateStr, dur, viewMode);
   };
 
   const handleSelectDuration = (duration: DurationMinutes) => {
@@ -203,7 +216,7 @@ export default function BookingHubPage() {
   };
 
   const calculatedTotalPrice = selectedDuration
-    ? getPriceForDuration(selectedDuration, selectedControllers)
+    ? getPriceForDuration(selectedDuration, selectedControllers, selectedDate)
     : 0;
 
   // Step Validation & Navigation
@@ -235,6 +248,12 @@ export default function BookingHubPage() {
         setErrorMessage('Please select an available time slot.');
         return;
       }
+      if (isGta6EventDate(selectedDate)) {
+        // Automatically bypass Step 4 (controllers) for GTA 6 event dates
+        setSelectedControllers(1);
+        setCurrentStep(5);
+        return;
+      }
       setCurrentStep(4);
       return;
     }
@@ -251,6 +270,11 @@ export default function BookingHubPage() {
 
   const handlePrevStep = () => {
     setErrorMessage('');
+    if (currentStep === 5 && isGta6EventDate(selectedDate)) {
+      // Step 4 was bypassed, navigate directly back to Step 3
+      setCurrentStep(3);
+      return;
+    }
     if (currentStep > 1) {
       setCurrentStep((prev) => prev - 1);
     }
@@ -303,11 +327,17 @@ export default function BookingHubPage() {
     setIsSubmitting(true);
 
     // 1. Generate unique 6-character alphanumeric booking ID
+    const isGtaDate = isGta6EventDate(selectedDate);
     const bookingId = generate6CharBookingId();
     const formattedDate = formatDateDisplay(selectedDate);
     const timeRange = `${selectedBlock.startTime} - ${selectedBlock.endTime}`;
-    const durationOption = DURATION_OPTIONS.find((d) => d.value === selectedDuration);
+    const durationOptions = getDurationOptionsForDate(selectedDate);
+    const durationOption =
+      durationOptions.find((d) => d.value === selectedDuration) ||
+      DURATION_OPTIONS.find((d) => d.value === selectedDuration);
     const durationLabel = durationOption ? durationOption.label : `${selectedDuration} Mins`;
+    const finalControllers = isGtaDate ? 1 : selectedControllers;
+    const finalPaymentStatus = isGtaDate ? paymentStatus : 'paid';
 
     try {
       // 2. Strict concurrency duplicate verification & atomic DB insertion across PS5-01 and PS5-02
@@ -320,10 +350,11 @@ export default function BookingHubPage() {
         startTime: selectedBlock.startTime,
         endTime: selectedBlock.endTime,
         durationMins: selectedDuration,
-        controllers: selectedControllers,
+        controllers: finalControllers,
         totalPrice: calculatedTotalPrice,
         slotIndices: selectedBlock.slotIndices,
         podId: selectedBlock.assignedPodId || 'pod-01',
+        paymentStatus: finalPaymentStatus,
       });
 
       if (result.success && result.bookingId) {
@@ -338,12 +369,13 @@ export default function BookingHubPage() {
           startTime: selectedBlock.startTime,
           endTime: selectedBlock.endTime,
           durationHours: `${selectedDuration} Mins`,
-          players: selectedControllers,
+          players: finalControllers,
           totalPrice: calculatedTotalPrice,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
           customerEmail: customerEmail.trim(),
           stationName,
+          paymentStatus: finalPaymentStatus,
           timestamp: new Date().toISOString(),
         };
 
@@ -364,13 +396,14 @@ export default function BookingHubPage() {
           formattedDate,
           timeRange,
           duration: durationLabel,
-          controllers: selectedControllers,
+          controllers: finalControllers,
           totalPrice: calculatedTotalPrice,
           stationName,
+          paymentStatus: finalPaymentStatus,
         });
 
         // Re-sync slot availability so background view updates in 1 round-trip
-        getBookingHubInitialDataAction(5).then((data) => {
+        getBookingHubInitialDataAction(14).then((data) => {
           if (data.success) {
             setAvailableDates(data.dates);
             setBookedSlotsCache(data.bookedSlotsByDate);
@@ -394,7 +427,7 @@ export default function BookingHubPage() {
               `The slot (${timeRange}) on ${formattedDate} has already been booked on all available PS5 stations.`,
           });
           // Refresh live slot availability immediately in 1 round-trip
-          getBookingHubInitialDataAction(5).then((data) => {
+          getBookingHubInitialDataAction(14).then((data) => {
             if (data.success) {
               setAvailableDates(data.dates);
               setBookedSlotsCache(data.bookedSlotsByDate);
@@ -664,14 +697,22 @@ export default function BookingHubPage() {
               </div>
 
               {/* Step Progression Bar */}
-              <div className="grid grid-cols-5 gap-1 sm:gap-2">
-                {[
-                  { num: 1, label: 'DATE' },
-                  { num: 2, label: 'MINUTES' },
-                  { num: 3, label: 'TIME' },
-                  { num: 4, label: 'HARDWARE' },
-                  { num: 5, label: 'DETAILS' },
-                ].map((s) => {
+              <div className={`grid gap-1 sm:gap-2 ${isGta6EventDate(selectedDate) ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                {(isGta6EventDate(selectedDate)
+                  ? [
+                      { num: 1, label: 'DATE' },
+                      { num: 2, label: 'MINUTES' },
+                      { num: 3, label: 'TIME' },
+                      { num: 5, label: 'DETAILS' },
+                    ]
+                  : [
+                      { num: 1, label: 'DATE' },
+                      { num: 2, label: 'MINUTES' },
+                      { num: 3, label: 'TIME' },
+                      { num: 4, label: 'HARDWARE' },
+                      { num: 5, label: 'DETAILS' },
+                    ]
+                ).map((s, idx) => {
                   const isActive = currentStep === s.num;
                   const isDone = currentStep > s.num;
 
@@ -693,7 +734,7 @@ export default function BookingHubPage() {
                       }`}
                     >
                       <div className="text-[10px] sm:text-xs">
-                        {isDone ? '✓' : `0${s.num}`} {s.label}
+                        {isDone ? '✓' : `0${idx + 1}`} {s.label}
                       </div>
                     </button>
                   );
@@ -719,10 +760,10 @@ export default function BookingHubPage() {
                         STEP 01 // CHOOSE BOOKING DATE
                       </h3>
                       <p className="text-[11px] text-[var(--g400)] mt-0.5 font-sans">
-                        Reservations are open for today and the next 4 days (5-day rolling window).
+                        Reservations are open for upcoming dates, including the GTA 6 Launch Special (Nov 19–30).
                       </p>
                     </div>
-                    <span className="text-[10px] text-[var(--red)] uppercase">5 DAYS AVAILABLE</span>
+                    <span className="text-[10px] text-[var(--red)] uppercase font-mono">DATES AVAILABLE</span>
                   </div>
 
                   {isLoadingDates ? (
@@ -747,6 +788,7 @@ export default function BookingHubPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3">
                       {availableDates.map((item: BookingDate) => {
                         const isSelected = selectedDate === item.dateString;
+                        const isGtaDay = isGta6EventDate(item.dateString);
 
                       return (
                         <button
@@ -768,6 +810,10 @@ export default function BookingHubPage() {
                               <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] bg-[var(--red)] text-white font-bold">
                                 TODAY
                               </span>
+                            ) : isGtaDay ? (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] bg-red-600/30 border border-red-500/50 text-red-300 font-bold">
+                                GTA 6
+                              </span>
                             ) : item.isWeekend ? (
                               <span className="px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] bg-[var(--g100)] text-[var(--g400)]">
                                 WKND
@@ -788,7 +834,9 @@ export default function BookingHubPage() {
                           </div>
 
                           <div className="pt-2 border-t border-[var(--g200)] flex items-center justify-between text-[10px]">
-                            <span className="text-[var(--g400)] text-[9px] sm:text-[10px]">12-10 PM</span>
+                            <span className="text-[var(--g400)] text-[9px] sm:text-[10px] font-mono">
+                              {isGtaDay ? '10AM-11PM' : '12-10 PM'}
+                            </span>
                             <span className={isSelected ? 'text-[var(--red)] font-bold' : 'text-[var(--g400)]'}>
                               {isSelected ? '✓' : 'SELECT'}
                             </span>
@@ -807,10 +855,14 @@ export default function BookingHubPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-base font-bold text-white uppercase">
-                        STEP 02 // CHOOSE SESSION MINUTES
+                        {isGta6EventDate(selectedDate)
+                          ? 'STEP 02 // CHOOSE GTA 6 SESSION DURATION'
+                          : 'STEP 02 // CHOOSE SESSION MINUTES'}
                       </h3>
                       <p className="text-[11px] text-[var(--g400)] mt-0.5 font-sans">
-                        Choose from 20m, 40m, 60m (1h), 120m (2h), or 180m (3h) continuous sessions on our PS5 console stations.
+                        {isGta6EventDate(selectedDate)
+                          ? 'GTA 6 Special: Choose 1 Hour, 2 Hours, or 3 Hours PS5 gaming sessions at ₹300/hour (controllers included).'
+                          : 'Choose from 20m, 40m, 60m (1h), 120m (2h), or 180m (3h) continuous sessions on our PS5 console stations.'}
                       </p>
                     </div>
                     <span className="text-[10px] text-[var(--red)] font-bold">
@@ -818,9 +870,10 @@ export default function BookingHubPage() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    {DURATION_OPTIONS.map((opt) => {
+                  <div className={`grid gap-3 ${isGta6EventDate(selectedDate) ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5'}`}>
+                    {getDurationOptionsForDate(selectedDate).map((opt) => {
                       const isSelected = selectedDuration === opt.value;
+                      const priceForOpt = getPriceForDuration(opt.value, 1, selectedDate);
 
                       return (
                         <button
@@ -851,6 +904,11 @@ export default function BookingHubPage() {
                             <div className="text-[10px] text-[var(--g400)] mt-0.5 font-sans leading-tight">
                               {opt.description}
                             </div>
+                            {isGta6EventDate(selectedDate) && (
+                              <div className="mt-1 text-sm font-bold text-white">
+                                ₹{priceForOpt} INR
+                              </div>
+                            )}
                           </div>
 
                           <div className="pt-2 border-t border-[var(--g200)] flex items-center justify-between text-[10px] text-[var(--g400)]">
@@ -912,7 +970,9 @@ export default function BookingHubPage() {
                           <div>
                             <span className="text-xs uppercase font-bold text-white flex items-center gap-1.5">
                               <span>📊</span>
-                              <span>CLICKABLE VISUAL TIMELINE // 12:00 PM – 10:00 PM</span>
+                              <span>
+                                CLICKABLE VISUAL TIMELINE // {isGta6EventDate(selectedDate) ? '10:00 AM – 11:00 PM' : '12:00 PM – 10:00 PM'}
+                              </span>
                             </span>
                             <span className="text-[10px] text-[var(--g400)] block mt-0.5">
                               Real-time availability of both PS5 Station 01 &amp; Station 02. Click any slot to select.
@@ -934,10 +994,10 @@ export default function BookingHubPage() {
                                 {cat === 'all'
                                   ? 'ALL'
                                   : cat === 'afternoon'
-                                  ? '12–4 PM'
+                                  ? isGta6EventDate(selectedDate) ? '10 AM–4 PM' : '12–4 PM'
                                   : cat === 'evening'
                                   ? '4–8 PM'
-                                  : '8–10 PM'}
+                                  : isGta6EventDate(selectedDate) ? '8–11 PM' : '8–10 PM'}
                               </button>
                             ))}
                           </div>
@@ -949,9 +1009,12 @@ export default function BookingHubPage() {
                             .filter((block) => {
                               if (timeFilterCategory === 'all') return true;
                               const startIdx = block.slotIndices[0];
-                              if (timeFilterCategory === 'afternoon') return startIdx < 24;
-                              if (timeFilterCategory === 'evening') return startIdx >= 24 && startIdx < 48;
-                              if (timeFilterCategory === 'night') return startIdx >= 48;
+                              const isGta = isGta6EventDate(selectedDate);
+                              const afternoonCutoff = isGta ? 36 : 24;
+                              const eveningCutoff = isGta ? 60 : 48;
+                              if (timeFilterCategory === 'afternoon') return startIdx < afternoonCutoff;
+                              if (timeFilterCategory === 'evening') return startIdx >= afternoonCutoff && startIdx < eveningCutoff;
+                              if (timeFilterCategory === 'night') return startIdx >= eveningCutoff;
                               return true;
                             })
                             .map((block) => {
@@ -1003,7 +1066,7 @@ export default function BookingHubPage() {
 
                                   <div className="pt-1.5 border-t border-[var(--g200)]/40 flex items-center justify-between text-[9px] opacity-85">
                                     <span>{block.durationLabel}</span>
-                                    <span>
+                                    {/* <span>
                                       {block.isAvailable
                                         ? block.availablePodsCount === 2
                                           ? 'PS5-01 & 02 Available'
@@ -1011,7 +1074,7 @@ export default function BookingHubPage() {
                                           ? 'PS5-01 Available'
                                           : 'PS5-02 Available'
                                         : 'All Stations Busy'}
-                                    </span>
+                                    </span> */}
                                   </div>
                                 </button>
                               );
@@ -1189,13 +1252,16 @@ export default function BookingHubPage() {
                     <div>
                       <span className="text-[var(--g400)]">Session:</span>
                       <div className="font-bold text-white mt-0.5">
-                        {selectedDuration} Mins ({selectedControllers} Controller{selectedControllers > 1 ? 's' : ''})
+                        {isGta6EventDate(selectedDate)
+                          ? `${selectedDuration} Mins (GTA 6 Special Pass)`
+                          : `${selectedDuration} Mins (${selectedControllers} Controller${selectedControllers > 1 ? 's' : ''})`}
                       </div>
                     </div>
                     <div>
                       <span className="text-[var(--g400)]">Station:</span>
                       <div className="font-bold text-emerald-400 mt-0.5">
                         {selectedBlock?.assignedPodId === 'pod-02' ? 'PS5 Station 02' : 'PS5 Station 01'}
+                        {isGta6EventDate(selectedDate) && ' · Controllers Incl.'}
                       </div>
                     </div>
                     <div>
@@ -1255,6 +1321,20 @@ export default function BookingHubPage() {
                         />
                       </div>
                     </div>
+
+                    {/* GTA 6 Payment Status Selector */}
+                    {isGta6EventDate(selectedDate) && (
+                      <div className="p-4 rounded-xl border border-[var(--g200)] bg-[#0d0d0d] space-y-3 font-mono">
+                        
+
+                        {paymentStatus === 'pending' && (
+                          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300 flex items-center gap-2 font-sans">
+                            <span className="text-base shrink-0">📞</span>
+                            <span>A call will be done from our side to complete payment.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1271,7 +1351,7 @@ export default function BookingHubPage() {
                   {formatDateDisplay(selectedDate)}
                   {selectedDuration ? ` · ${selectedDuration}m` : ''}
                   {selectedBlock ? ` · ${selectedBlock.startTime}` : ''}
-                  {selectedControllers ? ` · ${selectedControllers} Pad` : ''}
+                  {isGta6EventDate(selectedDate) ? ' · GTA 6 Pass' : (selectedControllers ? ` · ${selectedControllers} Pad` : '')}
                   {calculatedTotalPrice > 0 ? ` · ₹${calculatedTotalPrice} INR` : ''}
                 </span>
               </div>
@@ -1377,16 +1457,47 @@ export default function BookingHubPage() {
                 <span className="font-bold text-white">{successModal.customerName}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">Hardware & Controllers</span>
+                <span className="text-gray-400">Hardware & Console</span>
                 <span className="font-bold text-white">
-                  {successModal.stationName || 'PS5 Station 01'} • {successModal.controllers} {successModal.controllers > 1 ? 'Controllers' : 'Controller'} ({successModal.duration})
+                  {successModal.stationName || 'PS5 Station 01'} •{' '}
+                  {isGta6EventDate(successModal.date)
+                    ? 'Controllers Included'
+                    : `${successModal.controllers} ${successModal.controllers > 1 ? 'Controllers' : 'Controller'}`}{' '}
+                  ({successModal.duration})
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Payment Status</span>
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
+                    successModal.paymentStatus === 'pending'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}
+                >
+                  {successModal.paymentStatus === 'pending' ? '⏳ Pending' : '✓ Paid'}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t border-white/10 pt-2.5 text-sm">
-                <span className="text-gray-400">Amount Paid / Reserved</span>
+                <span className="text-gray-400">Amount Due / Reserved</span>
                 <span className="font-black text-emerald-400">₹{successModal.totalPrice} INR</span>
               </div>
             </div>
+
+            {/* Pending Payment Call Notice */}
+            {successModal.paymentStatus === 'pending' && (
+              <div className="mt-4 p-4 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs flex items-center gap-3 animate-fadeIn">
+                <span className="text-2xl shrink-0">📞</span>
+                <div className="leading-snug">
+                  <div className="font-bold text-amber-300 uppercase tracking-wide">
+                    Payment Verification Pending
+                  </div>
+                  <div className="mt-0.5 font-medium font-sans">
+                    A call will be done from our side to complete payment.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Action Buttons */}
             <div className="mt-6 flex flex-col sm:flex-row gap-3">

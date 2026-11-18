@@ -11,12 +11,40 @@ export const STATIONS = [
 
 export type StationId = (typeof STATIONS)[number]['id'];
 
-// 10-minute atomic slots: 12:00 PM to 10:00 PM = 10 hours = 600 mins = 60 slots
+// 10-minute atomic slots:
+// Regular Days: 12:00 PM to 10:00 PM = 10 hours = 600 mins = 60 slots
+// GTA 6 Event (Nov 19 - Nov 30): 10:00 AM to 11:00 PM = 13 hours = 780 mins = 78 slots
 export const SLOT_DURATION_MINS = 10;
 export const START_HOUR = 12; // 12:00 PM
 export const END_HOUR = 22; // 10:00 PM
 export const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60; // 600 mins
 export const TOTAL_SLOTS = TOTAL_MINUTES / SLOT_DURATION_MINS; // 60 slots
+
+export const GTA6_START_DATE = '2026-11-19';
+export const GTA6_END_DATE = '2026-11-30';
+
+export function isGta6EventDate(dateString: string): boolean {
+  return Boolean(dateString && dateString >= GTA6_START_DATE && dateString <= GTA6_END_DATE);
+}
+
+export function getOperatingHoursForDate(dateString?: string): {
+  startHour: number;
+  endHour: number;
+  totalSlots: number;
+} {
+  if (dateString && isGta6EventDate(dateString)) {
+    return {
+      startHour: 10,
+      endHour: 23,
+      totalSlots: ((23 - 10) * 60) / SLOT_DURATION_MINS, // 78 slots
+    };
+  }
+  return {
+    startHour: 12,
+    endHour: 22,
+    totalSlots: ((22 - 12) * 60) / SLOT_DURATION_MINS, // 60 slots
+  };
+}
 
 export interface SlotInfo {
   index: number;
@@ -55,6 +83,19 @@ export const DURATION_OPTIONS: DurationOption[] = [
   { value: 120, label: '2 Hours', slotsCount: 12, description: '120-Minute Marathon Session', badge: 'MARATHON' },
   { value: 180, label: '3 Hours', slotsCount: 18, description: '180-Minute Tournament Pass', badge: 'PRO PASS' },
 ];
+
+export const GTA6_DURATION_OPTIONS: DurationOption[] = [
+  { value: 60, label: '1 Hour', slotsCount: 6, description: '60-Minute GTA 6 Gaming Pass', badge: '1 HOUR PASS' },
+  { value: 120, label: '2 Hours', slotsCount: 12, description: '120-Minute GTA 6 Marathon', badge: 'POPULAR' },
+  { value: 180, label: '3 Hours', slotsCount: 18, description: '180-Minute GTA 6 Pro Pass', badge: 'MAX SESSION' },
+];
+
+export function getDurationOptionsForDate(dateString?: string): DurationOption[] {
+  if (dateString && isGta6EventDate(dateString)) {
+    return GTA6_DURATION_OPTIONS;
+  }
+  return DURATION_OPTIONS;
+}
 
 export interface TimeBlockAvailability {
   id: string;
@@ -115,6 +156,8 @@ export function getAvailableDates(
     const monthName = d.toLocaleDateString('en-US', { month: 'short' });
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
 
+    const { totalSlots } = getOperatingHoursForDate(dateString);
+
     dates.push({
       dateString,
       dayName,
@@ -122,7 +165,7 @@ export function getAvailableDates(
       monthName,
       isToday: dateString === todayStr,
       isWeekend,
-      availableCount: 120, // 60 slots * 2 stations
+      availableCount: totalSlots * 2, // 2 stations
     });
   }
 
@@ -150,7 +193,9 @@ export function getBookedSlotsForDate(dateString: string): Set<number> {
   return new Set<number>();
 }
 
-// Generate 60 10-minute slots from 12:00 PM to 10:00 PM for both stations
+// Generate atomic slots for date:
+// 10:00 AM to 11:00 PM for GTA 6 dates (78 slots)
+// 12:00 PM to 10:00 PM for regular dates (60 slots)
 export function getSlotsForDate(
   dateString: string,
   bookedSlotsByPod?: Record<string, number[]> | Set<number>
@@ -171,13 +216,15 @@ export function getSlotsForDate(
     pod02Booked = new Set();
   }
 
-  for (let i = 0; i < TOTAL_SLOTS; i++) {
+  const { startHour, totalSlots } = getOperatingHoursForDate(dateString);
+
+  for (let i = 0; i < totalSlots; i++) {
     const totalMinutesFromStart = i * SLOT_DURATION_MINS;
-    const slotHour = START_HOUR + Math.floor(totalMinutesFromStart / 60);
+    const slotHour = startHour + Math.floor(totalMinutesFromStart / 60);
     const slotMinute = totalMinutesFromStart % 60;
 
     const endTotalMinutesFromStart = (i + 1) * SLOT_DURATION_MINS;
-    const endSlotHour = START_HOUR + Math.floor(endTotalMinutesFromStart / 60);
+    const endSlotHour = startHour + Math.floor(endTotalMinutesFromStart / 60);
     const endSlotMinute = endTotalMinutesFromStart % 60;
 
     const timeString = formatTime(slotHour, slotMinute);
@@ -258,7 +305,10 @@ export function calculateAvailabilityBlocks(
   const totalSlots = slots.length; // 60
   const blocks: TimeBlockAvailability[] = [];
 
-  const durationOption = DURATION_OPTIONS.find((d) => d.value === durationMinutes);
+  const durationOptions = getDurationOptionsForDate(dateString);
+  const durationOption =
+    durationOptions.find((d) => d.value === durationMinutes) ||
+    DURATION_OPTIONS.find((d) => d.value === durationMinutes);
   const durationLabel = durationOption ? durationOption.label : `${durationMinutes} Mins`;
 
   // Step increments:
@@ -387,7 +437,10 @@ export function parseTimeToMinutes(timeStr: string): number {
   return hour * 60 + minute;
 }
 
-export function formatSlotRange(selectedSlots: number[]): {
+export function formatSlotRange(
+  selectedSlots: number[],
+  dateString?: string
+): {
   startTime: string;
   endTime: string;
   durationMinutes: number;
@@ -401,7 +454,8 @@ export function formatSlotRange(selectedSlots: number[]): {
   const minIndex = sorted[0];
   const maxIndex = sorted[sorted.length - 1];
 
-  const allSlots = getSlotsForDate('2026-01-01'); // helper time generator
+  const targetDate = dateString || '2026-01-01';
+  const allSlots = getSlotsForDate(targetDate);
   const startTime = allSlots[minIndex]?.timeString || '';
   const endTime = allSlots[maxIndex]?.endTimeString || '';
 
@@ -421,7 +475,7 @@ export function formatSlotRange(selectedSlots: number[]): {
   return { startTime, endTime, durationMinutes, durationHours };
 }
 
-// Official Controller Pricing Matrix in INR:
+// Official Controller Pricing Matrix in INR (Regular Days):
 // 1 Controller: 20m -> ₹60, 40m -> ₹130, 60m (1h) -> ₹150, 120m (2h) -> ₹300, 180m (3h) -> ₹450
 // 2 Controller: 20m -> ₹110, 40m -> ₹180, 60m (1h) -> ₹200, 120m (2h) -> ₹400, 180m (3h) -> ₹600
 export const PRICING_MATRIX: Record<number, { 1: number; 2: number }> = {
@@ -432,13 +486,31 @@ export const PRICING_MATRIX: Record<number, { 1: number; 2: number }> = {
   180: { 1: 450, 2: 600 },
 };
 
+// GTA 6 Launch Special Pricing in INR: ₹300 / hour flat rate (controllers included)
+export const GTA6_PRICING: Record<number, number> = {
+  60: 300,
+  120: 600,
+  180: 900,
+};
+
 export interface CustomerDetails {
   name: string;
   phone: string;
   email: string;
 }
 
-export function getPriceForDuration(durationMinutes: number, controllers: number): number {
+export function getPriceForDuration(
+  durationMinutes: number,
+  controllers: number,
+  dateString?: string
+): number {
+  if (dateString && isGta6EventDate(dateString)) {
+    if (GTA6_PRICING[durationMinutes]) {
+      return GTA6_PRICING[durationMinutes];
+    }
+    return Math.round((durationMinutes / 60) * 300);
+  }
+
   const tier = PRICING_MATRIX[durationMinutes];
   if (tier) {
     return controllers === 2 ? tier[2] : tier[1];
@@ -448,15 +520,19 @@ export function getPriceForDuration(durationMinutes: number, controllers: number
   return slots * baseRate;
 }
 
-export function calculatePrice(slotCount: number, playerCount: number): {
+export function calculatePrice(
+  slotCount: number,
+  playerCount: number,
+  dateString?: string
+): {
   perSlotRate: number;
   totalPrice: number;
   perHourRate: number;
 } {
   const durationMinutes = (slotCount || 1) * SLOT_DURATION_MINS;
-  const totalPrice = getPriceForDuration(durationMinutes, playerCount);
+  const totalPrice = getPriceForDuration(durationMinutes, playerCount, dateString);
   const perSlotRate = Math.round(totalPrice / (slotCount || 1));
-  const perHourRate = getPriceForDuration(60, playerCount);
+  const perHourRate = getPriceForDuration(60, playerCount, dateString);
   return { perSlotRate, totalPrice, perHourRate };
 }
 

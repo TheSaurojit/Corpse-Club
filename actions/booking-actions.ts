@@ -1,7 +1,14 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { generate6CharBookingId, getAvailableDates, BookingDate, parseTimeToMinutes } from '@/lib/booking';
+import {
+  generate6CharBookingId,
+  getAvailableDates,
+  BookingDate,
+  parseTimeToMinutes,
+  isGta6EventDate,
+  getOperatingHoursForDate,
+} from '@/lib/booking';
 
 export interface CreateBookingInput {
   id: string;
@@ -16,6 +23,7 @@ export interface CreateBookingInput {
   totalPrice: number;
   slotIndices: number[];
   podId?: string;
+  paymentStatus?: string; // 'paid' | 'pending'
 }
 
 export async function getDbBookedSlotIndicesAction(
@@ -145,7 +153,7 @@ export interface BookingHubInitialData {
  * and fetches all booked slots for both PS5 stations across all 5 dates in a SINGLE database query round-trip.
  */
 export async function getBookingHubInitialDataAction(
-  daysCount: number = 5,
+  daysCount: number = 14,
   baseDateStr?: string
 ): Promise<BookingHubInitialData> {
   try {
@@ -223,12 +231,14 @@ export async function getBookingHubInitialDataAction(
       }
     }
 
-    // 5. Populate availableCount for each date: Total capacity is 60 slots * 2 stations = 120 slot units
+    // 5. Populate availableCount for each date: Total capacity is totalSlots * 2 stations
     for (const d of dates) {
       const p1Booked = bookedSlotsByDateAndPod[d.dateString]?.['pod-01']?.length || 0;
       const p2Booked = bookedSlotsByDateAndPod[d.dateString]?.['pod-02']?.length || 0;
       const totalBooked = p1Booked + p2Booked;
-      d.availableCount = Math.max(0, 120 - totalBooked);
+      const { totalSlots } = getOperatingHoursForDate(d.dateString);
+      const maxCapacity = totalSlots * 2;
+      d.availableCount = Math.max(0, maxCapacity - totalBooked);
     }
 
     return {
@@ -287,15 +297,21 @@ export async function createDbBookingAction(
       }
     }
 
-    // 4. Enforce 5-day rolling booking window (Today + 4 days)
-    const maxWindowDate = new Date();
-    maxWindowDate.setDate(maxWindowDate.getDate() + 4);
-    const maxWindowStr = getDateStringInTimeZone(maxWindowDate, 'Asia/Kolkata');
-    if (input.bookingDate > maxWindowStr) {
-      return {
-        success: false,
-        error: `Booking window is strictly 5 days in advance. Maximum selectable date is ${maxWindowStr}.`,
-      };
+    // 4. Enforce booking window
+    // For GTA 6 dates (2026-11-19 to 2026-11-30), allow advance reservations throughout the GTA 6 event window
+    // For normal dates, enforce 5-day rolling booking window (Today + 4 days)
+    if (isGta6EventDate(input.bookingDate)) {
+      // Allowed through GTA 6 window
+    } else {
+      const maxWindowDate = new Date();
+      maxWindowDate.setDate(maxWindowDate.getDate() + 4);
+      const maxWindowStr = getDateStringInTimeZone(maxWindowDate, 'Asia/Kolkata');
+      if (input.bookingDate > maxWindowStr) {
+        return {
+          success: false,
+          error: `Booking window is strictly 5 days in advance. Maximum selectable date is ${maxWindowStr}.`,
+        };
+      }
     }
 
     // Ensure 6-character alphanumeric booking ID
@@ -359,7 +375,14 @@ export async function createDbBookingAction(
         finalId = generate6CharBookingId();
       }
 
-      // 3. Insert the Booking with assigned podId and lock the atomic slots
+      const isGtaDate = isGta6EventDate(input.bookingDate);
+      const finalPaymentStatus = input.paymentStatus
+        ? input.paymentStatus.toLowerCase().trim()
+        : isGtaDate
+        ? 'pending'
+        : 'paid';
+
+      // 3. Insert the Booking with assigned podId, paymentStatus, and lock the atomic slots
       await tx.booking.create({
         data: {
           id: finalId,
@@ -370,9 +393,10 @@ export async function createDbBookingAction(
           startTime: input.startTime,
           endTime: input.endTime,
           durationMins: input.durationMins,
-          controllers: input.controllers,
+          controllers: isGtaDate ? 1 : input.controllers,
           totalPrice: input.totalPrice,
           status: 'confirmed',
+          paymentStatus: 'pending',
           podId: finalAssignedPodId,
           slots: {
             create: input.slotIndices.map((idx) => ({
@@ -424,6 +448,7 @@ export interface AdminBookingRecord {
   controllers: number;
   totalPrice: number;
   status: string;
+  paymentStatus: string;
   podId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -518,6 +543,31 @@ export async function updateBookingStatusAction(
   } catch (err: unknown) {
     console.error('Error updating booking status:', err);
     return { success: false, error: 'Failed to update booking status' };
+  }
+}
+
+export async function updateBookingPaymentStatusAction(
+  bookingId: string,
+  newPaymentStatus: string,
+  adminEmail: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('placeholder')) {
+      return { success: false, error: 'Database not connected' };
+    }
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        paymentStatus: newPaymentStatus.toLowerCase().trim(),
+        updatedByEmail: adminEmail.toLowerCase().trim(),
+      },
+    });
+
+    return { success: true };
+  } catch (err: unknown) {
+    console.error('Error updating booking payment status:', err);
+    return { success: false, error: 'Failed to update booking payment status' };
   }
 }
 

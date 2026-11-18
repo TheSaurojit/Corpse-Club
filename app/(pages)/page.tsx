@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const games = [
-  { title: 'GTA 5',          type: 'Open World / Heists',        copy: 'High-stakes heists and chaos across Los Santos on ultra-crisp 4K.',               image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/271590/library_600x900.jpg',    index: '01' },
+  { title: 'GTA 6',          type: 'Open World / Vice City',     copy: 'Welcome to Leonida. Vice City neon, next-gen chaos, and ultra-crisp 4K 120Hz on PS5.', image: '/assets/gta6-cover.jpg',     index: '01' },
   { title: 'Spider-Man 2',   type: 'Solo / Action Adventure',    copy: 'Web-sling across Marvel’s New York with lightning-fast SSD traversal.',          image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2651280/library_600x900.jpg',   index: '02' },
   { title: 'FC 26',          type: 'Duo / Competitive',         copy: 'Settle the score in a no-excuses head-to-head football showdown.',                image: 'https://image.api.playstation.com/vulcan/ap/rnd/202608/0314/d0cc38456ebe67005ebea2709f52a3d2f6780985b6403219.png',   index: '03' },
   { title: 'Mortal Kombat',  type: 'Duo / Fight Night',          copy: 'Brutal fatalities and bone-crushing combos on low-latency displays.',             image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1971870/library_600x900.jpg',   index: '04' },
@@ -54,7 +54,7 @@ export default function HomePage() {
               <span className="funk-line funk-line--two"><span>DARK.</span></span>
             </h1>
             <p>The lights are low. The frames are high.<br />Corpse Club turns every session into a proper<br />night out — no queues, no filler, all game.</p>
-            <Link href="/book" className="funk-cta"><span>Book Now</span></Link>
+            <Link href="/book" className="funk-cta text-xl"><span>Book Now</span></Link>
           </div>
           <div className="funk-foot"><span> India</span><span>Corpse Club — est. 2026</span></div>
         </section>
@@ -69,16 +69,38 @@ export default function HomePage() {
         <h2 id="games-title">THE <em>LINEUP.</em></h2>
         <div className="funk-game-grid">
           {games.map((game) => (
-            <article className="funk-game" key={game.title}>
+            <article className={`funk-game ${game.title === 'GTA 6' ? 'funk-game--gta6' : ''}`} key={game.title}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={game.image} alt={game.title} />
+              <img
+                src={game.image}
+                alt={game.title}
+              />
               <div className="funk-game__veil" aria-hidden="true" />
               <span className="funk-game__number">{game.index}</span>
+              {game.title === 'GTA 6' && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '20px',
+                    right: '20px',
+                    background: '#e73726',
+                    color: '#fff',
+                    font: '600 10px/1 var(--font-mono, monospace)',
+                    letterSpacing: '0.12em',
+                    padding: '6px 10px',
+                    textTransform: 'uppercase',
+                    zIndex: 2,
+                    boxShadow: '0 2px 14px rgba(231,55,38,0.5)',
+                  }}
+                >
+                  Nov 19 – 30 Special
+                </span>
+              )}
               <div className="funk-game__copy">
                 <p>{game.type}</p>
                 <h3>{game.title}</h3>
                 <span className="funk-game__description">{game.copy}</span>
-                <Link href="/book">Book this game <span>↗</span></Link>
+                <Link href="/book">{game.title === 'GTA 6' ? 'Book GTA 6' : 'Book this game'} <span>↗</span></Link>
               </div>
             </article>
           ))}
