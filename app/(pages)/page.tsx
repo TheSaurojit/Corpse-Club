@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const games = [
-  { title: 'GTA 6',          type: 'Open World / Vice City',     copy: 'Welcome to Leonida. Vice City neon, next-gen chaos, and ultra-crisp 4K 120Hz on PS5.', image: '/assets/gta6-cover.jpg',     index: '01' },
-  { title: 'Spider-Man 2',   type: 'Solo / Action Adventure',    copy: 'Web-sling across Marvel’s New York with lightning-fast SSD traversal.',          image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2651280/library_600x900.jpg',   index: '02' },
-  { title: 'FC 26',          type: 'Duo / Competitive',         copy: 'Settle the score in a no-excuses head-to-head football showdown.',                image: 'https://image.api.playstation.com/vulcan/ap/rnd/202608/0314/d0cc38456ebe67005ebea2709f52a3d2f6780985b6403219.png',   index: '03' },
-  { title: 'Mortal Kombat',  type: 'Duo / Fight Night',          copy: 'Brutal fatalities and bone-crushing combos on low-latency displays.',             image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1971870/library_600x900.jpg',   index: '04' },
-  { title: 'It Takes Two',   type: 'Co-Op / Split Screen',       copy: 'Pure two-player chemistry. Either communicate or start over.',                   image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1426210/library_600x900.jpg',   index: '05' },
-  { title: 'WWE',       type: 'Duo / Ring Mayhem',          copy: 'Step inside the squared circle with bone-rattling slams and electric finishes.',  image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2878960/library_600x900.jpg',   index: '06' },
-  { title: 'Rocket League',  type: 'Competitive / Fast-Paced',   copy: 'Rocket-powered soccer with aerial control and 120Hz response.',                   image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/252950/library_600x900.jpg',    index: '07' },
-  { title: 'F1',             type: 'Solo & Duo / Precision Racing', copy: 'Hit every apex at 300 km/h with DualSense adaptive trigger feedback.',       image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2488620/library_600x900.jpg',   index: '08' },
+  { title: 'GTA 6', type: 'Open World / Vice City', copy: 'Welcome to Leonida. Vice City neon, next-gen chaos, and ultra-crisp 4K 120Hz on PS5.', image: '/assets/gta6-cover.jpg', index: '01' },
+  { title: 'Spider-Man 2', type: 'Solo / Action Adventure', copy: 'Web-sling across Marvel’s New York with lightning-fast SSD traversal.', image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2651280/library_600x900.jpg', index: '02' },
+  { title: 'FC 26', type: 'Duo / Competitive', copy: 'Settle the score in a no-excuses head-to-head football showdown.', image: 'https://image.api.playstation.com/vulcan/ap/rnd/202608/0314/d0cc38456ebe67005ebea2709f52a3d2f6780985b6403219.png', index: '03' },
+  { title: 'Mortal Kombat', type: 'Duo / Fight Night', copy: 'Brutal fatalities and bone-crushing combos on low-latency displays.', image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1971870/library_600x900.jpg', index: '04' },
+  { title: 'It Takes Two', type: 'Co-Op / Split Screen', copy: 'Pure two-player chemistry. Either communicate or start over.', image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1426210/library_600x900.jpg', index: '05' },
+  { title: 'WWE', type: 'Duo / Ring Mayhem', copy: 'Step inside the squared circle with bone-rattling slams and electric finishes.', image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2878960/library_600x900.jpg', index: '06' },
+  { title: 'Rocket League', type: 'Competitive / Fast-Paced', copy: 'Rocket-powered soccer with aerial control and 120Hz response.', image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/252950/library_600x900.jpg', index: '07' },
+  { title: 'F1', type: 'Solo & Duo / Precision Racing', copy: 'Hit every apex at 300 km/h with DualSense adaptive trigger feedback.', image: 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2488620/library_600x900.jpg', index: '08' },
 ];
 
 export default function HomePage() {
@@ -36,10 +36,10 @@ export default function HomePage() {
           <Link href="/" className="funk-brand" aria-label="Corpse Club home"><span>Corpse</span><strong>Club</strong></Link>
           <div className="funk-header__actions">
             <nav className="funk-nav" aria-label="Main navigation">
-              <a href="#lounge"   onClick={() => setMenuOpen(false)}>Lounge</a>
-              <a href="#library"  onClick={() => setMenuOpen(false)}>Library</a>
-              <a href="#ps5"      onClick={() => setMenuOpen(false)}>PS5 Pricing</a>
-              <a href="#contact"  onClick={() => setMenuOpen(false)}>Contact</a>
+              <a href="#lounge" onClick={() => setMenuOpen(false)}>Lounge</a>
+              <a href="#library" onClick={() => setMenuOpen(false)}>Library</a>
+              <a href="#ps5" onClick={() => setMenuOpen(false)}>PS5 Pricing</a>
+              <a href="#contact" onClick={() => setMenuOpen(false)}>Contact</a>
             </nav>
             <div className="funk-time"><span></span></div>
             <Link href="/book" className="funk-book">Book now</Link>
@@ -53,56 +53,55 @@ export default function HomePage() {
               <span className="funk-line funk-line--one"><span>PLAY AFTER</span></span>
               <span className="funk-line funk-line--two"><span>DARK.</span></span>
             </h1>
-            <p>The lights are low. The frames are high.<br />Corpse Club turns every session into a proper<br />night out — no queues, no filler, all game.</p>
+            <p>The lights are low. The frames are high.<br /> Corpse Club turns every session into a proper<br /> night out — no queues, no filler, all game.</p>
+
             {/* GTA 6 Pre-Booking Card CTA */}
-            <Link
-              href="/book"
-              className="funk-gta-card group relative mt-6 block w-full max-w-[420px] sm:max-w-[460px] overflow-hidden rounded-[26px] border-2 border-[#e414a2] p-5 sm:p-6 text-center shadow-[0_0_30px_rgba(228,20,162,0.45)] transition-all duration-300 hover:border-[#ff2ea6] hover:shadow-[0_0_50px_rgba(228,20,162,0.7)] hover:scale-[1.02] cursor-pointer"
-            >
-              {/* Background Art with Dark Scrim */}
-              <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-105"
-                style={{
-                  backgroundImage: "url('/assets/gta6-banner.jpg')",
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/60 transition-opacity duration-300 group-hover:opacity-85" />
+            <div className='flex items-center justify-center w-full sm:w-auto'>
+              <div className="mt-5 w-full max-w-[400px] ">
+                <Link
+                  href="/book"
+                  className="funk-gta-card group relative block w-full overflow-hidden rounded-[26px] border-2 border-[#e414a2] p-5 sm:p-6 text-center shadow-[0_0_35px_rgba(228,20,162,0.5)] transition-all duration-300 hover:border-[#ff2ea6] hover:shadow-[0_0_55px_rgba(228,20,162,0.75)] hover:scale-[1.02] cursor-pointer"
+                >
+                  {/* Background Art with Dark Scrim */}
+                  <div
+                    className="absolute inset-0 bg-cover bg-center transition-transform duration-700 ease-out group-hover:scale-105"
+                    style={{
+                      backgroundImage: "url('/assets/gta6-banner.jpg')",
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/60 transition-opacity duration-300 group-hover:opacity-85" />
 
-              {/* Card Content */}
-              <div className="relative z-10 flex flex-col items-center justify-center space-y-2">
-                {/* Pre-Booking Open Pill Badge */}
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e414a2] px-3.5 py-1 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[0.18em] text-white shadow-[0_0_15px_rgba(228,20,162,0.8)] font-mono">
-                  <svg className="w-3.5 h-3.5 text-white fill-current shrink-0" viewBox="0 0 24 24">
-                    <path d="M12 23c-4.97 0-9-4.03-9-9 0-4.14 2.84-7.6 6.78-8.68.4-.11.8.18.82.59.04.83.25 1.63.63 2.36.17.33.61.42.89.19.78-.65 1.4-1.46 1.83-2.38.16-.35.59-.47.91-.27 2.62 1.62 4.14 4.54 4.14 7.69 0 4.97-4.03 9-9 9zm0-16.14c-1.28 1.43-2.9 2.47-4.74 3.01C5.9 10.42 5 12.11 5 14c0 3.86 3.14 7 7 7s7-3.14 7-7c0-2.43-1.26-4.66-3.26-5.91-.76.99-1.74 1.78-2.87 2.32-.4.19-.88-.04-.98-.47-.28-1.22-.85-2.34-1.65-3.32-.08-.1-.17-.2-.24-.26z" />
-                  </svg>
-                  <span>PRE-BOOKING OPEN</span>
-                </span>
+                  {/* Card Content */}
+                  <div className="relative z-10 flex flex-col items-center justify-center space-y-2">
+                    {/* Pre-Booking Open Pill Badge */}
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e414a2] px-3.5 py-1 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-[0.18em] text-white shadow-[0_0_15px_rgba(228,20,162,0.8)] font-mono">
+                      <svg className="w-3.5 h-3.5 text-white fill-current shrink-0" viewBox="0 0 24 24">
+                        <path d="M12 23c-4.97 0-9-4.03-9-9 0-4.14 2.84-7.6 6.78-8.68.4-.11.8.18.82.59.04.83.25 1.63.63 2.36.17.33.61.42.89.19.78-.65 1.4-1.46 1.83-2.38.16-.35.59-.47.91-.27 2.62 1.62 4.14 4.54 4.14 7.69 0 4.97-4.03 9-9 9zm0-16.14c-1.28 1.43-2.9 2.47-4.74 3.01C5.9 10.42 5 12.11 5 14c0 3.86 3.14 7 7 7s7-3.14 7-7c0-2.43-1.26-4.66-3.26-5.91-.76.99-1.74 1.78-2.87 2.32-.4.19-.88-.04-.98-.47-.28-1.22-.85-2.34-1.65-3.32-.08-.1-.17-.2-.24-.26z" />
+                      </svg>
+                      <span>PRE-BOOKING OPEN</span>
+                    </span>
 
-                {/* Main GTA 6 Title */}
-                <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-[0.16em] text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)] my-0.5 font-sans">
-                  GTA 6
-                </h2>
+                    {/* Main GTA 6 Title */}
+                    <h2 className="text-3xl sm:text-4xl font-black uppercase tracking-[0.16em] text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)] my-0.5 font-sans">
+                      GTA 6
+                    </h2>
 
-                {/* Rules / Limited Consoles Disclaimer */}
-                <div className="flex items-center gap-1.5 text-xs sm:text-[13px] text-gray-200 font-sans tracking-wide drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
-                  <svg className="w-3.5 h-3.5 text-gray-300 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <span>Online payment only · limited consoles</span>
-                </div>
 
-                {/* Call To Action */}
-                <div className="pt-1 flex items-center justify-center gap-1.5 text-sm sm:text-base font-bold text-white group-hover:text-pink-300 transition-colors">
-                  <span>Reserve now</span>
-                  <span className="transition-transform duration-200 group-hover:translate-x-1.5">
-                    →
-                  </span>
-                </div>
+
+                    {/* Call To Action */}
+                    <div className="pt-1 flex items-center justify-center gap-1.5 text-sm sm:text-base font-bold text-white group-hover:text-pink-300 transition-colors">
+                      <span>Reserve now</span>
+                      <span className="transition-transform duration-200 group-hover:translate-x-1.5">
+                        →
+                      </span>
+                    </div>
+                  </div>
+                </Link>
               </div>
-            </Link>
+
+            </div>
+
           </div>
-          <div className="funk-foot"><span> India</span><span>Corpse Club — est. 2026</span></div>
         </section>
       </div>
 
@@ -173,7 +172,7 @@ export default function HomePage() {
         </div>
         <div className="funk-ps5__grid">
           {[
-            { slot: '01', duration: '20 MINUTES', single: '₹60',  extra: '+₹50' },
+            { slot: '01', duration: '20 MINUTES', single: '₹60', extra: '+₹50' },
             { slot: '02', duration: '40 MINUTES', single: '₹130', extra: '+₹50' },
             { slot: '03', duration: '60 MINUTES', single: '₹150', extra: '+₹50' },
           ].map((tier) => (
