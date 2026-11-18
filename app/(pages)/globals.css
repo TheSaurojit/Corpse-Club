@@ -15,11 +15,11 @@
   font-display: swap;
 }
 .gta6{
-  color: #e414a2 !important;
+  color: #e8191a !important;
 }
 
 :root {
-  --red: #e414a2;
+  --red: #e8191a;
   --red-dark: #b81213;
   --red-muted: #3d0a0a;
   --black: #0a0a0a;
@@ -362,7 +362,7 @@ button {
   text-transform: uppercase;
 }
 .club-display em {
-  color: #e414a2;
+  color: #e8191a;
   font-style: normal;
 }
 .club-hero {
@@ -405,7 +405,7 @@ button {
   margin-bottom: 28px;
 }
 .club-dot {
-  background: #e414a2;
+  background: #e8191a;
   border-radius: 50%;
   display: inline-block;
   height: 6px;
@@ -446,7 +446,7 @@ button {
   color: #151413;
 }
 .club-button--red {
-  background: #e414a2;
+  background: #e8191a;
   color: #fff;
   width: 100%;
 }
@@ -459,7 +459,7 @@ button {
   text-transform: uppercase;
 }
 .club-text-link span {
-  color: #e414a2;
+  color: #e8191a;
   margin-left: 14px;
 }
 .club-video-orbit {
@@ -510,7 +510,7 @@ button {
   text-transform: uppercase;
 }
 .club-video-orbit__label strong {
-  color: #e414a2;
+  color: #e8191a;
   font-size: 22px;
   font-weight: 400;
 }
@@ -537,7 +537,7 @@ button {
 }
 .club-video-orbit__caption {
   bottom: 3%;
-  color: #e414a2;
+  color: #e8191a;
   font: 500 10px/1.25 var(--font-mono);
   letter-spacing: 0.1em;
   margin: 0;
@@ -560,12 +560,12 @@ button {
   z-index: 2;
 }
 .club-rule {
-  background: #e414a2;
+  background: #e8191a;
   height: 1px;
   width: 48px;
 }
 .club-statement {
-  background: #e414a2;
+  background: #e8191a;
   color: #151413;
   min-height: 780px;
   padding: clamp(80px, 10vw, 150px) clamp(22px, 9vw, 150px) 58px;
@@ -688,7 +688,7 @@ button {
   text-transform: uppercase;
 }
 .club-program__body a span {
-  color: #e414a2;
+  color: #e8191a;
   margin-left: 16px;
 }
 .club-rate {
@@ -736,12 +736,12 @@ button {
   margin-bottom: 29px;
 }
 .club-rate__items span:nth-child(even) {
-  color: #e414a2;
+  color: #e8191a;
   text-align: right;
 }
 .club-closing {
   align-items: center;
-  background: #e414a2;
+  background: #e8191a;
   color: #151413;
   display: flex;
   flex-direction: column;
@@ -851,7 +851,7 @@ button {
   text-transform: uppercase;
 }
 .club-nav__brand span:last-child {
-  color: #e414a2;
+  color: #e8191a;
   display: block;
   margin-left: 24px;
 }
@@ -878,7 +878,7 @@ button {
 }
 .club-nav__book {
   align-items: center;
-  background: #e414a2;
+  background: #e8191a;
   display: flex;
   gap: 20px;
   padding: 13px 15px;
@@ -906,7 +906,7 @@ button {
   letter-spacing: -0.09em;
 }
 .club-footer__mark em {
-  color: #e414a2;
+  color: #e8191a;
   font-style: normal;
 }
 .club-footer__top p {
@@ -916,7 +916,7 @@ button {
   max-width: 290px;
 }
 .club-footer__link {
-  border-bottom: 1px solid #e414a2;
+  border-bottom: 1px solid #e8191a;
   color: #f0eee7;
   font: 10px var(--font-mono);
   letter-spacing: 0.09em;
@@ -966,7 +966,7 @@ button {
     padding: 15px 0;
   }
   .club-nav__mobile a:last-child {
-    color: #e414a2;
+    color: #e8191a;
   }
   .club-footer__top {
     align-items: start;
@@ -1016,7 +1016,7 @@ button {
 .funk-lounge h2 em,
 .funk-rates h2 em,
 .funk-end h2 em {
-  color: #e414a2;
+  color: #e8191a;
   font-style: normal;
 }
 .funk-game-grid {
@@ -1084,11 +1084,11 @@ button {
   text-transform: uppercase;
 }
 .funk-game__copy a span {
-  color: #e414a2;
+  color: #e8191a;
   margin-left: 16px;
 }
 .funk-lounge {
-  background: #e414a2;
+  background: #e8191a;
   color: #151413;
   display: grid;
   gap: 70px;
@@ -1182,14 +1182,14 @@ button {
   margin-bottom: 29px;
 }
 .funk-rate-card > div em {
-  color: #e414a2;
+  color: #e8191a;
   font-style: normal;
   text-align: right;
 }
 .funk-rate-card > a,
 .funk-end > a {
   align-items: center;
-  background: #e414a2;
+  background: #e8191a;
   color: #fff;
   display: flex;
   font: 10px var(--font-mono);
@@ -1205,7 +1205,7 @@ button {
 }
 .funk-end {
   align-items: center;
-  background: #e414a2;
+  background: #e8191a;
   color: #151413;
   display: flex;
   flex-direction: column;
@@ -1371,7 +1371,7 @@ button {
   width: 42px;
 }
 .funk-brand strong {
-  color: #e414a2;
+  color: #e8191a;
   display: block;
   font-weight: 300;
   margin-left: 22px;
@@ -1400,7 +1400,7 @@ button {
   top: -3px;
 }
 .funk-nav a:first-child:after {
-  background: #e414a2;
+  background: #e8191a;
   bottom: -9px;
   box-shadow: 0 0 10px rgba(243, 52, 35, 0.72);
   content: "";
@@ -1501,7 +1501,7 @@ button {
 }
 .funk-cta {
   align-items: center;
-  background: #e414a2;
+  background: #e8191a;
   border-radius: 12px;
   box-shadow: 0 4px 25px rgba(228, 20, 162, 0.45);
   color: white;
@@ -1537,7 +1537,7 @@ button {
   z-index: 2;
 }
 .funk-foot span + span:before {
-  color: #e414a2;
+  color: #e8191a;
   content: "/";
   margin: 0 12px;
 }
@@ -1546,7 +1546,8 @@ button {
 .funk-pending .funk-time,
 .funk-pending .funk-book,
 .funk-pending .funk-copy p,
-.funk-pending .funk-cta {
+.funk-pending .funk-cta,
+.funk-pending .funk-gta-card {
   opacity: 0;
 }
 .funk-pending .funk-line > span {
@@ -1555,7 +1556,8 @@ button {
 .funk-pending .funk-copy p {
   transform: translateY(10px);
 }
-.funk-pending .funk-cta {
+.funk-pending .funk-cta,
+.funk-pending .funk-gta-card {
   transform: translateY(8px) scale(0.985);
 }
 .funk-pending .funk-brand {
@@ -1577,7 +1579,8 @@ button {
   animation: funk-nav 0.52s cubic-bezier(0.16, 1, 0.3, 1) 0.18s forwards;
 }
 .funk-pending .funk-book,
-.funk-pending .funk-cta {
+.funk-pending .funk-cta,
+.funk-pending .funk-gta-card {
   animation: funk-action 0.56s cubic-bezier(0.16, 1, 0.3, 1) 0.96s forwards;
 }
 .funk-pending .funk-line--one > span {
