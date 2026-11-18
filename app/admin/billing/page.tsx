@@ -22,6 +22,7 @@ import {
   getPs5Rate,
   formatCurrency,
 } from "@/lib/pricing";
+import Gta6BillingSection from "@/components/admin/Gta6BillingSection";
 
 export default function AdminBillingPage() {
   const [bills, setBills] = useState<BillRecord[]>([]);
@@ -273,6 +274,24 @@ export default function AdminBillingPage() {
       },
     ]);
     setTempPs5Qty(1);
+  };
+
+  // Add GTA 6 Event session row (Remove when event ends)
+  const handleAddGta6Session = (session: {
+    controller: string;
+    duration: number;
+    unitPrice: number;
+    quantity: number;
+  }) => {
+    setSelectedPs5Sessions((prev) => [
+      ...prev,
+      {
+        controller: session.controller as any,
+        duration: session.duration as any,
+        unitPrice: session.unitPrice,
+        quantity: session.quantity,
+      },
+    ]);
   };
 
   const handleRemovePs5Session = (index: number) => {
@@ -886,6 +905,9 @@ export default function AdminBillingPage() {
                 </div>
               </div>
 
+              {/* ─── GTA 6 EVENT PS5 SESSIONS (REMOVE WHEN EVENT ENDS) ─── */}
+              <Gta6BillingSection onAddSession={handleAddGta6Session} />
+
               {/* 2. PS5 Sessions (Optional - Multi-session support) */}
               <div className="rounded-xl border border-white/10 bg-[#171720] p-4">
                 <div className="flex items-center justify-between">
@@ -976,8 +998,16 @@ export default function AdminBillingPage() {
                       return (
                         <div key={idx} className="flex items-center justify-between px-3 py-2 text-xs">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-purple-300 capitalize">
-                              {session.controller} Controller
+                            <span
+                              className={`font-semibold capitalize ${
+                                session.controller === "GTA 6"
+                                  ? "text-red-400 font-bold"
+                                  : "text-purple-300"
+                              }`}
+                            >
+                              {session.controller === "GTA 6"
+                                ? "GTA 6 Event Pass"
+                                : `${session.controller} Controller`}
                             </span>
                             <span className="text-gray-400">({session.duration} min)</span>
                             <span className="text-gray-500">× {session.quantity}</span>
@@ -1368,7 +1398,9 @@ export default function AdminBillingPage() {
                 {receiptTarget.sessions.map((s, idx) => (
                   <div key={`s-${idx}`} className="flex justify-between text-[11px]">
                     <span>
-                      PS5 {s.controller} ({s.duration}m) × {s.quantity}
+                      {s.controller === "GTA 6"
+                        ? `GTA 6 Pass (${s.duration}m) × ${s.quantity}`
+                        : `PS5 ${s.controller} (${s.duration}m) × ${s.quantity}`}
                     </span>
                     <span className="font-semibold">{formatCurrency(s.total)}</span>
                   </div>

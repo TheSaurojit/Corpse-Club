@@ -50,11 +50,17 @@ export default function HomePage() {
         <section id="lounge" className="funk-hero" aria-labelledby="hero-title">
           <div className="funk-copy">
             <h1 id="hero-title" className="funk-title">
-              <span className="funk-line funk-line--one"><span>PLAY AFTER</span></span>
-              <span className="funk-line funk-line--two"><span>DARK.</span></span>
+              <span className="funk-line funk-line--one"><span className='gta6'>PLAY AFTER</span></span>
+              <span className="funk-line funk-line--two"><span className='gta6'>DARK.</span></span>
             </h1>
-            <p>The lights are low. The frames are high.<br />Corpse Club turns every session into a proper<br />night out — no queues, no filler, all game.</p>
-            <Link href="/book" className="funk-cta text-xl"><span>Book Now</span></Link>
+            <p className='gta6'>The lights are low. The frames are high.<br />Corpse Club turns every session into a proper<br />night out — no queues, no filler, all game.</p>
+            <Link
+              href="/book"
+              className="funk-cta text-xl sm:text-2xl font-bold tracking-wide shadow-lg shadow-[#e414a2]/40 hover:scale-105 transition-all"
+              style={{ backgroundColor: '#e414a2' }}
+            >
+              <span>Book Now</span>
+            </Link>
           </div>
           <div className="funk-foot"><span> India</span><span>Corpse Club — est. 2026</span></div>
         </section>

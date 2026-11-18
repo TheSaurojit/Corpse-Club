@@ -230,8 +230,10 @@ export async function createBillAction(data: CreateBillInput): Promise<{
       const qty = Math.max(1, Number(s.quantity) || 1);
       const lineTotal = unitPrice * qty;
       ps5Amount += lineTotal;
+      const isDual = String(s.controller).toLowerCase() === 'dual';
+      const isGta = String(s.controller).toLowerCase().includes('gta');
       return {
-        controller: s.controller.toLowerCase() === 'dual' ? 'dual' : 'single',
+        controller: isDual ? 'dual' : isGta ? 'GTA 6' : 'single',
         duration: Number(s.duration) || 20,
         unitPrice,
         quantity: qty,
@@ -387,8 +389,10 @@ export async function updateBillAction(
       const qty = Math.max(1, Number(s.quantity) || 1);
       const lineTotal = unitPrice * qty;
       ps5Amount += lineTotal;
+      const isDual = String(s.controller).toLowerCase() === 'dual';
+      const isGta = String(s.controller).toLowerCase().includes('gta');
       return {
-        controller: s.controller.toLowerCase() === 'dual' ? 'dual' : 'single',
+        controller: isDual ? 'dual' : isGta ? 'GTA 6' : 'single',
         duration: Number(s.duration) || 20,
         unitPrice,
         quantity: qty,
