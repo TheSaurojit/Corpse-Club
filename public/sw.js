@@ -57,3 +57,63 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// -------------------------------------------------------------
+// Web Push Notifications
+// -------------------------------------------------------------
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { body: event.data.text() };
+    }
+  }
+
+  const title = data.title || '🎮 New Booking Alert!';
+  const options = {
+    body: data.body || 'A new reservation has been made.',
+    icon: data.icon || '/icons/icon-192x192.png',
+    badge: '/icons/icon-192x192.png',
+    vibrate: [200, 100, 200],
+    tag: data.bookingId ? `booking-${data.bookingId}` : undefined,
+    renotify: true,
+    data: {
+      url: data.url || '/admin/bookings',
+      bookingId: data.bookingId,
+    },
+    actions: [
+      { action: 'view', title: 'Open Bookings' },
+      { action: 'dismiss', title: 'Dismiss' },
+    ],
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  if (event.action === 'dismiss') {
+    return;
+  }
+
+  const targetUrl = event.notification.data?.url || '/admin/bookings';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes('/admin') && 'focus' in client) {
+          client.navigate(targetUrl);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+

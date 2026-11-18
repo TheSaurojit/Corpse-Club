@@ -7,6 +7,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { getAdminSessionAction, logoutAdminAction } from "@/actions/admin-auth";
+import NotificationButton from "@/components/admin/NotificationButton";
 import "./globals.css";
 
 interface AdminLayoutProps {
@@ -410,24 +411,8 @@ export default function AdminLayout({
                     </button>
                   )}
 
-                  {/* Notification */}
-                  <button
-                    className="
-                  relative flex h-10 w-10
-                  items-center justify-center
-                  rounded-xl border border-white/10
-                  bg-white/[0.03]
-                  text-gray-400
-                  hover:bg-white/10
-                  hover:text-white
-                "
-                  >
-                    <span className="text-lg">
-                      ♢
-                    </span>
-
-                    <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-purple-500" />
-                  </button>
+                  {/* Web Push Notification Manager */}
+                  <NotificationButton />
 
                   {/* Profile */}
                   <div className="relative">

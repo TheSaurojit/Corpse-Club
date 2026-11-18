@@ -1,6 +1,8 @@
 'use server';
 
+import { after } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { sendBookingCreatedNotificationToAdmins } from '@/lib/push-notifications';
 import {
   generate6CharBookingId,
   getAvailableDates,
@@ -407,6 +409,24 @@ export async function createDbBookingAction(
           },
         },
       });
+    });
+
+    // Asynchronously dispatch Web Push notifications to all active admin devices without blocking the client response
+    after(async () => {
+      try {
+        await sendBookingCreatedNotificationToAdmins({
+          id: finalId,
+          customerName: input.customerName.trim(),
+          customerPhone: input.customerPhone.trim(),
+          bookingDate: input.bookingDate,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          podId: finalAssignedPodId,
+          totalPrice: input.totalPrice,
+        });
+      } catch (pushErr) {
+        console.error('[WebPush] Error during asynchronous notification dispatch in after():', pushErr);
+      }
     });
 
     return { success: true, bookingId: finalId, assignedPodId: finalAssignedPodId };

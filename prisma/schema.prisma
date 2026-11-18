@@ -11,13 +11,14 @@ datasource db {
 }
 
 model Admin {
-  id              Int       @id @default(autoincrement())
-  email           String    @unique
-  name            String?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedBookings Booking[]
-  bills           Bill[]
-  expenses        Expense[]
+  id                Int                     @id @default(autoincrement())
+  email             String                  @unique
+  name              String?
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedBookings   Booking[]
+  bills             Bill[]
+  expenses          Expense[]
+  pushSubscriptions AdminPushSubscription[]
 
   @@map("admins")
 }
@@ -154,4 +155,20 @@ model Expense {
   updatedAt      DateTime @updatedAt @default(now()) @map("updated_at")
 
   @@map("expenses")
+}
+
+model AdminPushSubscription {
+  id         Int      @id @default(autoincrement())
+  adminEmail String   @map("admin_email")
+  admin      Admin?   @relation(fields: [adminEmail], references: [email], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?  @map("user_agent")
+  deviceName String?  @map("device_name")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @default(now()) @map("updated_at")
+
+  @@index([adminEmail])
+  @@map("admin_push_subscriptions")
 }
