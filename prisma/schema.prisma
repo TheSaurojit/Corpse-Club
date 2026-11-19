@@ -20,6 +20,7 @@ model Admin {
   bills             Bill[]
   expenses          Expense[]
   pushSubscriptions AdminPushSubscription[]
+  adjustments       MoneyAdjustment[]
 
   @@map("admins")
 }
@@ -178,4 +179,23 @@ model AdminPushSubscription {
 
   @@index([adminEmail])
   @@map("admin_push_subscriptions")
+}
+
+model MoneyAdjustment {
+  id             Int      @id @default(autoincrement())
+  type           String   @default("transfer") // "transfer" or "correction"
+  fromAccount    String   @map("from_account") // "cash" or "online"
+  toAccount      String   @map("to_account")   // "online" or "cash"
+  amount         Int      // in INR
+  date           String   // YYYY-MM-DD
+  reason         String   // e.g. "Cash to UPI Deposit", "Drawer Float Top-up", "Admin Cash Swap"
+  notes          String?
+  adminId        Int?     @map("admin_id")
+  admin          Admin?   @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  createdByEmail String?  @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @default(now()) @map("updated_at")
+
+  @@index([date])
+  @@map("money_adjustments")
 }

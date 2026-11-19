@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { getBankLedgerAction, BankLedgerData, PassbookEntry } from "@/actions/finance-actions";
 import { formatCurrency } from "@/lib/pricing";
 
@@ -63,7 +64,15 @@ export default function AdminBankLedgerPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/admin/adjustments"
+            className="flex h-10 items-center gap-2 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 text-xs font-semibold text-purple-300 transition hover:bg-purple-500/20"
+          >
+            <span>⇄</span>
+            <span>Transfer / Adjust</span>
+          </Link>
+
           <button
             type="button"
             onClick={loadLedger}

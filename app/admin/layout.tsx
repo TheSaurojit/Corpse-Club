@@ -41,6 +41,11 @@ const navigation = [
     icon: "💸",
   },
   {
+    name: "Adjustments",
+    href: "/admin/adjustments",
+    icon: "⇄",
+  },
+  {
     name: "Bank & Ledger",
     href: "/admin/bank",
     icon: "🏦",

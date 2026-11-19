@@ -11,9 +11,9 @@ function createPrismaClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
-// In development, ensure the cached instance has the latest models (e.g. holiday)
+// In development, ensure the cached instance has the latest models (e.g. holiday, moneyAdjustment)
 const existingPrisma = globalForPrisma.prisma;
-const isUpToDate = Boolean(existingPrisma && 'holiday' in existingPrisma);
+const isUpToDate = Boolean(existingPrisma && 'holiday' in existingPrisma && 'moneyAdjustment' in existingPrisma);
 
 export const prisma = isUpToDate && existingPrisma ? existingPrisma : createPrismaClient();
 
