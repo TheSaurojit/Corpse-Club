@@ -16,7 +16,7 @@ export interface CreateBookingInput {
   id: string;
   customerName: string;
   customerPhone: string;
-  customerEmail: string;
+  customerEmail?: string | null;
   bookingDate: string;
   startTime: string;
   endTime: string;
@@ -390,7 +390,7 @@ export async function createDbBookingAction(
           id: finalId,
           customerName: input.customerName.trim(),
           customerPhone: input.customerPhone.trim(),
-          customerEmail: input.customerEmail ? input.customerEmail.trim() : '',
+          customerEmail: input.customerEmail ? input.customerEmail.trim() : "",
           bookingDate: input.bookingDate,
           startTime: input.startTime,
           endTime: input.endTime,
@@ -460,7 +460,7 @@ export interface AdminBookingRecord {
   id: string;
   customerName: string;
   customerPhone: string;
-  customerEmail: string;
+  customerEmail?: string | null;
   bookingDate: string;
   startTime: string;
   endTime: string;
@@ -553,6 +553,25 @@ export async function getAllBookingsForAdminAction(): Promise<{
   }
 }
 
+async function ensureAdminExists(adminEmail?: string | null): Promise<string | null> {
+  if (!adminEmail || !adminEmail.trim()) return null;
+  const cleanEmail = adminEmail.toLowerCase().trim();
+  try {
+    const admin = await prisma.admin.upsert({
+      where: { email: cleanEmail },
+      update: {},
+      create: {
+        email: cleanEmail,
+        name: cleanEmail.split('@')[0],
+      },
+    });
+    return admin.email;
+  } catch (e) {
+    console.warn('Could not ensure admin record for foreign key, falling back to null:', e);
+    return null;
+  }
+}
+
 export async function updateBookingStatusAction(
   bookingId: string,
   newStatus: string,
@@ -563,11 +582,13 @@ export async function updateBookingStatusAction(
       return { success: false, error: 'Database not connected' };
     }
 
+    const validAdminEmail = await ensureAdminExists(adminEmail);
+
     await prisma.booking.update({
       where: { id: bookingId },
       data: {
         status: newStatus,
-        updatedByEmail: adminEmail.toLowerCase().trim(),
+        updatedByEmail: validAdminEmail,
       },
     });
 
@@ -588,11 +609,13 @@ export async function updateBookingPaymentStatusAction(
       return { success: false, error: 'Database not connected' };
     }
 
+    const validAdminEmail = await ensureAdminExists(adminEmail);
+
     await prisma.booking.update({
       where: { id: bookingId },
       data: {
         paymentStatus: newPaymentStatus.toLowerCase().trim(),
-        updatedByEmail: adminEmail.toLowerCase().trim(),
+        updatedByEmail: validAdminEmail,
       },
     });
 
@@ -613,11 +636,13 @@ export async function toggleBookingCalledStatusAction(
       return { success: false, error: 'Database not connected' };
     }
 
+    const validAdminEmail = isCalled ? await ensureAdminExists(adminEmail) : null;
+
     await prisma.booking.update({
       where: { id: bookingId },
       data: {
         isCalled,
-        calledByEmail: isCalled ? adminEmail.toLowerCase().trim() : null,
+        calledByEmail: validAdminEmail,
       },
     });
 

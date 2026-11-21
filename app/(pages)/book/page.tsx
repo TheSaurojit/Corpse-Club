@@ -97,7 +97,6 @@ export default function BookingHubPage() {
   // Customer credentials
   const [customerName, setCustomerName] = useState<string>('');
   const [customerPhone, setCustomerPhone] = useState<string>('');
-  const [customerEmail, setCustomerEmail] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Submitting and Result Modal States
@@ -311,10 +310,6 @@ export default function BookingHubPage() {
       setErrorMessage('Please enter a valid 10-digit phone number.');
       return;
     }
-    if (!customerEmail.trim() || !customerEmail.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
-      return;
-    }
 
     // Past date check
     const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -345,7 +340,6 @@ export default function BookingHubPage() {
         id: bookingId,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
-        customerEmail: customerEmail.trim(),
         bookingDate: selectedDate,
         startTime: selectedBlock.startTime,
         endTime: selectedBlock.endTime,
@@ -373,7 +367,6 @@ export default function BookingHubPage() {
           totalPrice: calculatedTotalPrice,
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
-          customerEmail: customerEmail.trim(),
           stationName,
           paymentStatus: finalPaymentStatus,
           timestamp: new Date().toISOString(),
@@ -835,7 +828,7 @@ export default function BookingHubPage() {
 
                           <div className="pt-2 border-t border-[var(--g200)] flex items-center justify-between text-[10px]">
                             <span className="text-[var(--g400)] text-[9px] sm:text-[10px] font-mono">
-                              {isGtaDay ? '10AM-11PM' : '12-10 PM'}
+                              {isGtaDay ? '12PM-11PM' : '12-10 PM'}
                             </span>
                             <span className={isSelected ? 'text-[var(--red)] font-bold' : 'text-[var(--g400)]'}>
                               {isSelected ? '✓' : 'SELECT'}
@@ -971,7 +964,7 @@ export default function BookingHubPage() {
                             <span className="text-xs uppercase font-bold text-white flex items-center gap-1.5">
                               <span>📊</span>
                               <span>
-                                CLICKABLE VISUAL TIMELINE // {isGta6EventDate(selectedDate) ? '10:00 AM – 11:00 PM' : '12:00 PM – 10:00 PM'}
+                                CLICKABLE VISUAL TIMELINE // {isGta6EventDate(selectedDate) ? '12:00 PM – 11:00 PM' : '12:00 PM – 10:00 PM'}
                               </span>
                             </span>
                             <span className="text-[10px] text-[var(--g400)] block mt-0.5">
@@ -994,7 +987,7 @@ export default function BookingHubPage() {
                                 {cat === 'all'
                                   ? 'ALL'
                                   : cat === 'afternoon'
-                                  ? isGta6EventDate(selectedDate) ? '10 AM–4 PM' : '12–4 PM'
+                                  ? '12–4 PM'
                                   : cat === 'evening'
                                   ? '4–8 PM'
                                   : isGta6EventDate(selectedDate) ? '8–11 PM' : '8–10 PM'}
@@ -1009,9 +1002,8 @@ export default function BookingHubPage() {
                             .filter((block) => {
                               if (timeFilterCategory === 'all') return true;
                               const startIdx = block.slotIndices[0];
-                              const isGta = isGta6EventDate(selectedDate);
-                              const afternoonCutoff = isGta ? 36 : 24;
-                              const eveningCutoff = isGta ? 60 : 48;
+                              const afternoonCutoff = 24; // 12 PM to 4 PM (4h = 24 slots)
+                              const eveningCutoff = 48;   // 4 PM to 8 PM (4h = 24 slots)
                               if (timeFilterCategory === 'afternoon') return startIdx < afternoonCutoff;
                               if (timeFilterCategory === 'evening') return startIdx >= afternoonCutoff && startIdx < eveningCutoff;
                               if (timeFilterCategory === 'night') return startIdx >= eveningCutoff;
@@ -1292,34 +1284,18 @@ export default function BookingHubPage() {
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs uppercase font-bold text-white mb-1">
-                          Phone Number <span className="text-[var(--red)]">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          placeholder="e.g. 9876543210"
-                          value={customerPhone}
-                          onChange={(e) => setCustomerPhone(e.target.value)}
-                          className="w-full px-4 py-3 rounded-lg bg-black border border-[var(--g200)] text-white text-xs font-mono focus:outline-none focus:border-[var(--red)] cursor-none"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs uppercase font-bold text-white mb-1">
-                          Email Address <span className="text-[var(--red)]">*</span>
-                        </label>
-                        <input
-                          type="email"
-                          required
-                          placeholder="e.g. alex@example.com"
-                          value={customerEmail}
-                          onChange={(e) => setCustomerEmail(e.target.value)}
-                          className="w-full px-4 py-3 rounded-lg bg-black border border-[var(--g200)] text-white text-xs font-mono focus:outline-none focus:border-[var(--red)] cursor-none"
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-xs uppercase font-bold text-white mb-1">
+                        Phone Number <span className="text-[var(--red)]">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 9876543210"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        className="w-full px-4 py-3 rounded-lg bg-black border border-[var(--g200)] text-white text-xs font-mono focus:outline-none focus:border-[var(--red)] cursor-none"
+                      />
                     </div>
 
                     {/* GTA 6 Payment Status Selector */}
@@ -1516,7 +1492,6 @@ export default function BookingHubPage() {
                   setSuccessModal(null);
                   setCustomerName('');
                   setCustomerPhone('');
-                  setCustomerEmail('');
                 }}
                 className="py-3 px-5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-semibold text-gray-300 transition cursor-none"
               >

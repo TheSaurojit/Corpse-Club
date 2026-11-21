@@ -13,7 +13,7 @@ export type StationId = (typeof STATIONS)[number]['id'];
 
 // 10-minute atomic slots:
 // Regular Days: 12:00 PM to 10:00 PM = 10 hours = 600 mins = 60 slots
-// GTA 6 Event (Nov 19 - Nov 30): 10:00 AM to 11:00 PM = 13 hours = 780 mins = 78 slots
+// GTA 6 Event (Nov 19 - Nov 30): 12:00 PM to 11:00 PM = 11 hours = 660 mins = 66 slots
 export const SLOT_DURATION_MINS = 10;
 export const START_HOUR = 12; // 12:00 PM
 export const END_HOUR = 22; // 10:00 PM
@@ -34,9 +34,9 @@ export function getOperatingHoursForDate(dateString?: string): {
 } {
   if (dateString && isGta6EventDate(dateString)) {
     return {
-      startHour: 10,
+      startHour: 12,
       endHour: 23,
-      totalSlots: ((23 - 10) * 60) / SLOT_DURATION_MINS, // 78 slots
+      totalSlots: ((23 - 12) * 60) / SLOT_DURATION_MINS, // 66 slots
     };
   }
   return {
@@ -194,7 +194,7 @@ export function getBookedSlotsForDate(dateString: string): Set<number> {
 }
 
 // Generate atomic slots for date:
-// 10:00 AM to 11:00 PM for GTA 6 dates (78 slots)
+// 12:00 PM to 11:00 PM for GTA 6 dates (66 slots)
 // 12:00 PM to 10:00 PM for regular dates (60 slots)
 export function getSlotsForDate(
   dateString: string,
@@ -496,7 +496,7 @@ export const GTA6_PRICING: Record<number, number> = {
 export interface CustomerDetails {
   name: string;
   phone: string;
-  email: string;
+  email?: string;
 }
 
 export function getPriceForDuration(
